@@ -40,7 +40,7 @@ export default function DashboardPage() {
   const router = useRouter();
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<"overview" | "products" | "orders" | "settings">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "products" | "orders" | "settings">("settings");
 
   // Profile States
   const [ownerName, setOwnerName] = useState("Store Owner");
