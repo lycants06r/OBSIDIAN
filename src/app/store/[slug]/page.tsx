@@ -8,7 +8,7 @@ export default function StoreSlugPage() {
 
   useEffect(() => {
     const slug = (routeParams?.slug as string) || "";
-    const target = slug ? `/store.html?slug=${encodeURIComponent(slug)}` : "/store.html";
+    const target = slug ? `/p3.html?slug=${encodeURIComponent(slug)}` : "/p3.html";
     window.location.replace(target);
   }, [routeParams]);
 

@@ -5,7 +5,7 @@ import { useEffect } from "react";
 export default function StoreRedirectPage() {
   useEffect(() => {
     // Forward directly to the customer store HTML page
-    window.location.replace("/store.html");
+    window.location.replace("/p3.html");
   }, []);
 
   return (

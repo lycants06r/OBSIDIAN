@@ -277,100 +277,47 @@ export default function LoginPage() {
 
       setLoading(true);
       const displayName = fullName.trim() || trimmedEmail.split("@")[0];
+      const safeId = `user_${Date.now()}`;
 
-      try {
-        const usersJson = localStorage.getItem("obsidian_registered_users");
-        const users: Array<{ id: string; email: string; password?: string; full_name?: string }> = usersJson
-          ? JSON.parse(usersJson)
-          : [];
+      const loggedUser: LocalUser = {
+        id: safeId,
+        email: trimmedEmail,
+        full_name: displayName,
+      };
 
-        const existing = users.find(
-          (u) => u.email.toLowerCase() === trimmedEmail.toLowerCase()
-        );
+      localStorage.setItem("obsidian_session", JSON.stringify(loggedUser));
+      localStorage.setItem("obsidian_token", `local-token-${safeId}`);
+      localStorage.setItem("ownerName", displayName);
+      setActiveSessionUser(loggedUser);
 
-        if (existing) {
-          setLoading(false);
-          triggerToast("An account with this email already exists.");
-          return;
-        }
-
-        const newUser = {
-          id: `user_${Date.now()}`,
-          email: trimmedEmail,
-          password,
-          full_name: displayName,
-        };
-
-        users.push(newUser);
-        localStorage.setItem("obsidian_registered_users", JSON.stringify(users));
-
-        const loggedUser: LocalUser = {
-          id: newUser.id,
-          email: newUser.email,
-          full_name: newUser.full_name,
-        };
-
-        localStorage.setItem("obsidian_session", JSON.stringify(loggedUser));
-        localStorage.setItem("obsidian_token", `token_${Date.now()}`);
-        localStorage.setItem("ownerName", displayName);
-        setActiveSessionUser(loggedUser);
-
-        triggerToast("Account created successfully!");
-        setTimeout(() => {
-          setLoading(false);
-          router.push("/home");
-        }, 800);
-      } catch (err: any) {
+      triggerToast("Account created successfully!");
+      setTimeout(() => {
         setLoading(false);
-        triggerToast("Failed to create account. Please try again.");
-      }
+        router.push("/p1");
+      }, 1000);
     } else {
       setLoading(true);
       const displayName = fullName.trim() || trimmedEmail.split("@")[0];
+      const safeId = `user_${Date.now()}`;
 
-      try {
-        const usersJson = localStorage.getItem("obsidian_registered_users");
-        const users: Array<{ id: string; email: string; password?: string; full_name?: string }> = usersJson
-          ? JSON.parse(usersJson)
-          : [];
+      const loggedUser: LocalUser = {
+        id: safeId,
+        email: trimmedEmail,
+        full_name: displayName,
+      };
 
-        const existingUser = users.find(
-          (u) => u.email.toLowerCase() === trimmedEmail.toLowerCase()
-        );
-
-        if (existingUser && existingUser.password && existingUser.password !== password) {
-          setLoading(false);
-          triggerToast("Invalid credentials. Please check your password.");
-          return;
-        }
-
-        const loggedUser: LocalUser = {
-          id: existingUser?.id || `user_${Date.now()}`,
-          email: trimmedEmail,
-          full_name: existingUser?.full_name || displayName,
-        };
-
-        if (!existingUser) {
-          users.push({ ...loggedUser, password });
-          localStorage.setItem("obsidian_registered_users", JSON.stringify(users));
-        }
-
-        localStorage.setItem("obsidian_session", JSON.stringify(loggedUser));
-        localStorage.setItem("obsidian_token", `token_${Date.now()}`);
-        if (!localStorage.getItem("ownerName") || loggedUser.full_name) {
-          localStorage.setItem("ownerName", loggedUser.full_name || displayName);
-        }
-        setActiveSessionUser(loggedUser);
-
-        triggerToast("Signed In Successfully!");
-        setTimeout(() => {
-          setLoading(false);
-          router.push("/home");
-        }, 800);
-      } catch (err: any) {
-        setLoading(false);
-        triggerToast("Invalid credentials. Please check your email and password.");
+      localStorage.setItem("obsidian_session", JSON.stringify(loggedUser));
+      localStorage.setItem("obsidian_token", `local-token-${safeId}`);
+      if (!localStorage.getItem("ownerName")) {
+        localStorage.setItem("ownerName", displayName);
       }
+      setActiveSessionUser(loggedUser);
+
+      triggerToast("Signed In Successfully!");
+      setTimeout(() => {
+        setLoading(false);
+        router.push("/p1");
+      }, 1000);
     }
   };
 
@@ -441,7 +388,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     className="resume-btn"
-                    onClick={() => router.push("/home")}
+                    onClick={() => router.push("/p1")}
                     data-cursor="link"
                   >
                     Resume Store →
@@ -664,17 +611,30 @@ export default function LoginPage() {
                       type="button"
                       data-cursor="link"
                       onClick={() => {
-                        const demoUser: LocalUser = {
-                          id: "google_user",
-                          email: "alex@obsidian.io",
-                          full_name: "Alex Morgan",
+                        const targetEmail = email.trim() || prompt("Enter your Gmail address to sign in with Google:")?.trim() || "";
+                        if (!targetEmail) {
+                          triggerToast("Please enter your Gmail address to sign in.");
+                          return;
+                        }
+
+                        setLoading(true);
+                        const targetName = fullName.trim() || targetEmail.split("@")[0];
+                        const safeId = `user_${targetEmail.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+                        const loggedUser: LocalUser = {
+                          id: safeId,
+                          email: targetEmail,
+                          full_name: targetName,
                         };
-                        localStorage.setItem("obsidian_session", JSON.stringify(demoUser));
-                        localStorage.setItem("obsidian_token", "dev-mock-google-user");
-                        localStorage.setItem("ownerName", "Alex Morgan");
-                        setActiveSessionUser(demoUser);
-                        triggerToast("Signed in with Google!");
-                        setTimeout(() => router.push("/home"), 1000);
+
+                        localStorage.setItem("obsidian_session", JSON.stringify(loggedUser));
+                        localStorage.setItem("obsidian_token", `local-token-${safeId}`);
+                        localStorage.setItem("ownerName", targetName);
+                        setActiveSessionUser(loggedUser);
+                        triggerToast(`Signed in with Google (${targetEmail})!`);
+                        setTimeout(() => {
+                          setLoading(false);
+                          router.push("/p1");
+                        }, 1000);
                       }}
                     >
                       <svg viewBox="0 0 24 24" width="18" height="18">

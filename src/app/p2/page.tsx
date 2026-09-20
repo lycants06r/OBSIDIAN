@@ -116,97 +116,74 @@ export default function DashboardPage() {
   const [userId, setUserId] = useState<string>("");
   const [isGuestUser, setIsGuestUser] = useState<boolean>(false);
 
-  // Authenticate session and load local store state
+  // Authenticate session and load store state from localStorage
   useEffect(() => {
-    try {
-      const storedSession = localStorage.getItem("obsidian_session");
+    const initDashboard = () => {
       let currentUserId = "local_user";
-      if (storedSession) {
-        try {
+      let storedShop = "OBSIDIAN Store";
+      let storedType = "clothing";
+      let storedCurrency = "₹";
+      let initialProducts: Product[] = [];
+      let initialOrders: Order[] = [];
+
+      try {
+        const storedSession = localStorage.getItem("obsidian_session");
+        if (storedSession) {
           const user = JSON.parse(storedSession);
           if (user?.id) currentUserId = user.id;
-          if (user?.full_name) setOwnerName(user.full_name);
-        } catch {
-          // ignore
         }
-      }
-      setUserId(currentUserId);
+        setUserId(currentUserId);
 
-      const storedOwner = localStorage.getItem("ownerName");
-      if (storedOwner) setOwnerName(storedOwner);
+        const storedOwner = localStorage.getItem("ownerName");
+        if (storedOwner) setOwnerName(storedOwner);
 
-      const storedShop = localStorage.getItem("shopName") || "OBSIDIAN Store";
-      setShopName(storedShop);
+        storedShop = localStorage.getItem("shopName") || "OBSIDIAN Store";
+        setShopName(storedShop);
 
-      const storedType = localStorage.getItem("businessType") || "clothing";
-      setBusinessType(storedType);
+        storedType = localStorage.getItem("businessType") || "clothing";
+        setBusinessType(storedType);
 
-      const storedCustomType = localStorage.getItem("customBusinessType") || "";
-      if (storedCustomType) setCustomBusinessType(storedCustomType);
+        const storedCustomType = localStorage.getItem("customBusinessType") || "";
+        if (storedCustomType) setCustomBusinessType(storedCustomType);
 
-      const storedCustomOpts = localStorage.getItem("customOptions");
-      if (storedCustomOpts) {
-        try {
-          const parsed = JSON.parse(storedCustomOpts);
-          if (Array.isArray(parsed)) setCustomOptions(parsed);
-        } catch {}
-      }
+        const storedCustomOpts = localStorage.getItem("customOptions");
+        if (storedCustomOpts) {
+          try {
+            const parsed = JSON.parse(storedCustomOpts);
+            if (Array.isArray(parsed)) setCustomOptions(parsed);
+          } catch {}
+        }
 
-      const storedAddressMethod = (localStorage.getItem("addressMethod") as "manual" | "map") || "manual";
-      setAddressMethod(storedAddressMethod);
+        const storedAddressMethod = (localStorage.getItem("addressMethod") as "manual" | "map") || "manual";
+        setAddressMethod(storedAddressMethod);
 
-      const storedAddress = localStorage.getItem("shopAddress") || "";
-      setShopAddress(storedAddress);
+        const storedAddress = localStorage.getItem("shopAddress") || "";
+        setShopAddress(storedAddress);
 
-      const storedCurrency = localStorage.getItem("storeCurrency") || localStorage.getItem("currency") || "₹";
-      setCurrency(storedCurrency);
+        storedCurrency = localStorage.getItem("storeCurrency") || localStorage.getItem("currency") || "₹";
+        setCurrency(storedCurrency);
 
-      // Load products from either obsidian_products or products
-      const rawProducts = localStorage.getItem("obsidian_products") || localStorage.getItem("products");
-      if (rawProducts) {
-        try {
+        const rawProducts = localStorage.getItem("obsidian_products") || localStorage.getItem("products");
+        if (rawProducts) {
           const parsed = JSON.parse(rawProducts);
-          if (Array.isArray(parsed)) {
-            setProducts(parsed);
-            localStorage.setItem("obsidian_products", JSON.stringify(parsed));
-            localStorage.setItem("products", JSON.stringify(parsed));
-          } else {
-            setProducts([]);
-          }
-        } catch {
-          setProducts([]);
+          if (Array.isArray(parsed)) initialProducts = parsed;
         }
-      } else {
-        setProducts([]);
-        localStorage.setItem("obsidian_products", JSON.stringify([]));
-        localStorage.setItem("products", JSON.stringify([]));
-      }
+        setProducts(initialProducts);
 
-      // Load orders from either obsidian_orders or orders
-      const rawOrders = localStorage.getItem("obsidian_orders") || localStorage.getItem("orders");
-      if (rawOrders) {
-        try {
+        const rawOrders = localStorage.getItem("obsidian_orders") || localStorage.getItem("orders");
+        if (rawOrders) {
           const parsed = JSON.parse(rawOrders);
-          if (Array.isArray(parsed)) {
-            setOrders(parsed);
-            localStorage.setItem("obsidian_orders", JSON.stringify(parsed));
-            localStorage.setItem("orders", JSON.stringify(parsed));
-          } else {
-            setOrders([]);
-          }
-        } catch {
-          setOrders([]);
+          if (Array.isArray(parsed)) initialOrders = parsed;
         }
-      } else {
-        setOrders([]);
-        localStorage.setItem("obsidian_orders", JSON.stringify([]));
-        localStorage.setItem("orders", JSON.stringify([]));
+        setOrders(initialOrders);
+      } catch {
+        // ignore localStorage errors
+      } finally {
+        setAuthLoading(false);
       }
-    } catch (err) {
-      console.error("Dashboard initialization error:", err);
-    } finally {
-      setAuthLoading(false);
-    }
+    };
+
+    initDashboard();
   }, []);
 
   // Compute live storefront URL dynamically based on shopName and current origin
@@ -214,7 +191,7 @@ export default function DashboardPage() {
     if (typeof window !== "undefined") {
       const storeSlug = shopName.toLowerCase().replace(/\s+/g, "-");
       const base = window.location.origin || "http://localhost:3000";
-      setStorefrontUrl(`${base}/store/${storeSlug}`);
+      setStorefrontUrl(`${base}/p3.html?slug=${storeSlug}`);
     }
   }, [shopName]);
 
@@ -245,7 +222,7 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // Save changes helpers with localStorage persistence (synced to both keys)
+  // Save changes helpers with localStorage persistence
   const updateProductList = (newProducts: Product[]) => {
     setProducts(newProducts);
     localStorage.setItem("obsidian_products", JSON.stringify(newProducts));
@@ -257,6 +234,7 @@ export default function DashboardPage() {
     localStorage.setItem("obsidian_orders", JSON.stringify(newOrders));
     localStorage.setItem("orders", JSON.stringify(newOrders));
   };
+
 
   // Dynamic Statistics
   const totalProducts = products.length;
@@ -543,7 +521,7 @@ export default function DashboardPage() {
   const copyStoreLink = () => {
     const storeSlug = shopName.toLowerCase().replace(/\s+/g, "-");
     const base = typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:3000";
-    const link = `${base}/store/${storeSlug}`;
+    const link = `${base}/p3.html?slug=${storeSlug}`;
     navigator.clipboard.writeText(link);
     triggerToast("Live store link copied to clipboard! 📋");
   };
@@ -573,6 +551,7 @@ export default function DashboardPage() {
     localStorage.setItem("shopAddress", shopAddress.trim());
     localStorage.setItem("storeCurrency", currency);
     localStorage.setItem("currency", currency);
+
     triggerToast("Store profile & configuration saved! ✅");
   };
 
@@ -638,7 +617,7 @@ export default function DashboardPage() {
 
       {/* ── LEFT SIDEBAR ── */}
       <aside className="db-sidebar">
-        <Link href="/dashboard" className="db-brand" data-cursor="link">
+        <Link href="/p2" className="db-brand" data-cursor="link">
           <div className="db-brand-icon">O</div>
           <div className="db-brand-text">
             <span className="db-brand-title">OBSIDIAN</span>
@@ -775,7 +754,6 @@ export default function DashboardPage() {
                 Refresh
               </button>
             )}
-
 
             {/* Profile Chip */}
             <div className="db-profile-chip">
@@ -1209,7 +1187,7 @@ export default function DashboardPage() {
                     {/* Store Link URL Box */}
                     <div className="stitch-link-box">
                       <span className="stitch-link-text">
-                        {storefrontUrl || `http://localhost:3000/store/${shopName.toLowerCase().replace(/\s+/g, "-")}`}
+                        {storefrontUrl || `http://localhost:3000/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
                       </span>
                       <button className="stitch-copy-btn" onClick={copyStoreLink} type="button">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -1222,7 +1200,7 @@ export default function DashboardPage() {
                     {/* Quick Link Footer */}
                     <div className="stitch-link-footer">
                       <a
-                        href={`/store/${shopName.toLowerCase().replace(/\s+/g, "-")}`}
+                        href={`/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="stitch-link-btn"
@@ -1757,7 +1735,7 @@ export default function DashboardPage() {
                     required
                   />
                   <span style={{ fontSize: "0.72rem", color: "var(--nm-text-light)" }}>
-                    Defines your storefront slug: /store/{shopName.toLowerCase().replace(/\s+/g, "-")}
+                    Defines your storefront slug: /p3.html?slug={shopName.toLowerCase().replace(/\s+/g, "-")}
                   </span>
                 </div>
               </div>
@@ -2216,7 +2194,7 @@ export default function DashboardPage() {
                 📋 Copy Store Link
               </button>
               <a
-                href={`/store/${shopName.toLowerCase().replace(/\s+/g, "-")}`}
+                href={`/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="db-btn db-btn-secondary"
@@ -2549,7 +2527,7 @@ export default function DashboardPage() {
                 Scan to Open {shopName}
               </h4>
               <p style={{ color: "var(--nm-text-muted)", fontSize: "0.78rem", maxWidth: 300, margin: "0 auto 18px", wordBreak: "break-all" }}>
-                {storefrontUrl || `http://localhost:3000/store/${shopName.toLowerCase().replace(/\s+/g, "-")}`}
+                {storefrontUrl || `http://localhost:3000/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
               </p>
 
               <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>

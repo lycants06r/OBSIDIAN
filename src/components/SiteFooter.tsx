@@ -6,13 +6,13 @@ export default function SiteFooter() {
     <footer className="site-footer">
       <span className="t-label footer-brand">{content.footer.left}</span>
       <nav className="footer-links" style={{ display: "flex", gap: "16px", flexWrap: "wrap", alignItems: "center" }}>
-        <Link href="/home" data-cursor="link">
+        <Link href="/p1" data-cursor="link">
           Monument
         </Link>
-        <Link href="/dashboard" data-cursor="link">
+        <Link href="/p2" data-cursor="link">
           Dashboard
         </Link>
-        <a href="/store.html" target="_blank" rel="noopener noreferrer" data-cursor="link">
+        <a href="/p3.html" target="_blank" rel="noopener noreferrer" data-cursor="link">
           Customer Store ↗
         </a>
         <a href="/checkout.html" target="_blank" rel="noopener noreferrer" data-cursor="link">

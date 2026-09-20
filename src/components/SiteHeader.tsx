@@ -35,7 +35,7 @@ export default function SiteHeader() {
       >
         {/* Brand */}
         <Link
-          href="/home"
+          href="/p1"
           data-cursor="link"
           style={{
             display: "flex",
@@ -72,7 +72,7 @@ export default function SiteHeader() {
           }}
         >
           <Link
-            href="/home"
+            href="/p1"
             data-cursor="link"
             style={{
               textDecoration: "none",
@@ -80,8 +80,8 @@ export default function SiteHeader() {
               borderRadius: "999px",
               fontSize: "0.8rem",
               fontWeight: 600,
-              color: pathname === "/home" ? "#ffffff" : "#94a3b8",
-              background: pathname === "/home" ? "rgba(255, 255, 255, 0.14)" : "transparent",
+              color: pathname === "/p1" ? "#ffffff" : "#94a3b8",
+              background: pathname === "/p1" ? "rgba(255, 255, 255, 0.14)" : "transparent",
               transition: "all 0.2s",
             }}
           >
@@ -90,7 +90,7 @@ export default function SiteHeader() {
 
 
           <Link
-            href="/dashboard"
+            href="/p2"
             data-cursor="link"
             style={{
               textDecoration: "none",
@@ -98,8 +98,8 @@ export default function SiteHeader() {
               borderRadius: "999px",
               fontSize: "0.8rem",
               fontWeight: 600,
-              color: pathname === "/dashboard" ? "#ffffff" : "#94a3b8",
-              background: pathname === "/dashboard" ? "rgba(255, 255, 255, 0.14)" : "transparent",
+              color: pathname === "/p2" ? "#ffffff" : "#94a3b8",
+              background: pathname === "/p2" ? "rgba(255, 255, 255, 0.14)" : "transparent",
               transition: "all 0.2s",
             }}
           >
@@ -107,7 +107,7 @@ export default function SiteHeader() {
           </Link>
 
           <a
-            href="/store.html"
+            href="/p3.html"
             target="_blank"
             rel="noopener noreferrer"
             data-cursor="link"
@@ -169,7 +169,7 @@ export default function SiteHeader() {
           </Link>
 
           <Link
-            href="/dashboard"
+            href="/p2"
             data-cursor="link"
             style={{
               textDecoration: "none",

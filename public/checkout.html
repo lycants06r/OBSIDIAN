@@ -228,8 +228,8 @@
                     <span id="shopSubtitle" style="font-size: 13px; color: #475569;">Obsidian Merchant Network</span>
                 </div>
                 <div style="display:flex; align-items:center; gap:12px;">
-                    <a href="/store.html" class="back-link">← Store</a>
-                    <a href="/dashboard" class="back-link" style="color:#0f766e;">📊 Dashboard</a>
+                    <a href="/p3.html" class="back-link">← Store</a>
+                    <a href="/p2" class="back-link" style="color:#0f766e;">📊 Dashboard</a>
                     <a href="/login" class="back-link" style="color:#4338ca;">🔑 Login</a>
                 </div>
             </div>
@@ -296,10 +296,10 @@
                 A receipt has been recorded and the merchant has been notified!
             </p>
             <div style="display: flex; justify-content: center; gap: 12px;">
-                <a href="store.html" class="back-link" style="padding: 12px 24px; font-size: 15px;">
+                <a href="/p3.html" class="back-link" style="padding: 12px 24px; font-size: 15px;">
                     🛍️ Continue Shopping
                 </a>
-                <a href="/dashboard" class="back-link"
+                <a href="/p2" class="back-link"
                     style="padding: 12px 24px; font-size: 15px; background: #0f172a; color: #fff; border: none;">
                     📊 View In Dashboard
                 </a>
@@ -345,7 +345,7 @@
             e.preventDefault();
             if (cart.length === 0) {
                 alert("Cart is empty! Please add items from the store first.");
-                window.location.href = "store.html";
+                window.location.href = "/p3.html";
                 return;
             }
 
@@ -405,29 +405,27 @@
                 }
             } catch (err) { }
 
-            // Empty cart
-            localStorage.removeItem("cart");
-
             // Display success screen
             document.getElementById("checkoutMain").style.display = "none";
             document.getElementById("orderSuccess").style.display = "block";
         }
-        <!-- Project Navigation Hub -->
-        <aside aria-label="OBSIDIAN Project Navigation" style="position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:9999;max-width:96vw;font-family:Arial,sans-serif;">
-            <div style="display:flex;align-items:center;gap:8px;background:rgba(10,15,26,0.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.18);box-shadow:0 18px 45px rgba(0,0,0,0.35);border-radius:999px;padding:6px 14px;">
-                <a href="/home" style="display:flex;align-items:center;gap:6px;text-decoration:none;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,0.1);color:#fff;font-size:12px;font-weight:800;letter-spacing:0.08em;border:1px solid rgba(255,255,255,0.15);">
-                    <span style="color:#38bdf8;">●</span> OBSIDIAN
-                </a>
-                <div style="display:flex;align-items:center;gap:4px;overflow-x:auto;">
-                    <a href="/home" style="text-decoration:none;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;color:#cbd5e1;">🏛️ Monument</a>
-                    <a href="/page3" style="text-decoration:none;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;color:#cbd5e1;">✨ Setup</a>
-                    <a href="/dashboard" style="text-decoration:none;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;color:#cbd5e1;">📊 Dashboard</a>
-                    <a href="/store.html" style="text-decoration:none;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;color:#cbd5e1;">🛍️ Store</a>
-                    <a href="/checkout.html" style="text-decoration:none;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:700;color:#fff;background:rgba(56,189,248,0.25);border:1px solid rgba(56,189,248,0.45);">💳 Checkout</a>
-                </div>
-            </div>
-        </aside>
+    </script>
 
-</body >
+    <!-- Project Navigation Hub -->
+    <aside aria-label="OBSIDIAN Project Navigation" style="position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:9999;max-width:96vw;font-family:Arial,sans-serif;">
+        <div style="display:flex;align-items:center;gap:8px;background:rgba(10,15,26,0.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.18);box-shadow:0 18px 45px rgba(0,0,0,0.35);border-radius:999px;padding:6px 14px;">
+            <a href="/p1" style="display:flex;align-items:center;gap:6px;text-decoration:none;padding:5px 12px;border-radius:999px;background:rgba(255,255,255,0.1);color:#fff;font-size:12px;font-weight:800;letter-spacing:0.08em;border:1px solid rgba(255,255,255,0.15);">
+                <span style="color:#38bdf8;">●</span> OBSIDIAN
+            </a>
+            <div style="display:flex;align-items:center;gap:4px;overflow-x:auto;">
+                <a href="/p1" style="text-decoration:none;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;color:#cbd5e1;">🏛️ Monument</a>
+                <a href="/p2" style="text-decoration:none;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;color:#cbd5e1;">📊 Dashboard</a>
+                <a href="/p3.html" style="text-decoration:none;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;color:#cbd5e1;">🛍️ Store</a>
+                <a href="/checkout.html" style="text-decoration:none;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:700;color:#fff;background:rgba(56,189,248,0.25);border:1px solid rgba(56,189,248,0.45);">💳 Checkout</a>
+            </div>
+        </div>
+    </aside>
+
+</body>
 
 </html >

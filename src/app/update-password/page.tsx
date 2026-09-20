@@ -79,7 +79,7 @@ export default function UpdatePasswordPage() {
 
       // Auto redirect after short delay
       setTimeout(() => {
-        router.push("/dashboard");
+        router.push("/p2");
       }, 2000);
     } catch (err: unknown) {
       const message =
@@ -257,7 +257,7 @@ export default function UpdatePasswordPage() {
                 {successMessage} Redirecting to your dashboard...
               </p>
               <Link
-                href="/dashboard"
+                href="/p2"
                 className="btn-primary"
                 style={{
                   display: "inline-block",
