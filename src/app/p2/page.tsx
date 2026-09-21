@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 import "./dashboard.css";
 
 
@@ -111,14 +112,25 @@ export default function DashboardPage() {
   // Storefront live URL state
   const [storefrontUrl, setStorefrontUrl] = useState("");
 
+  // Backend Integration States
+  const [backendStoreId, setBackendStoreId] = useState<string>("");
+  const [isDeploying, setIsDeploying] = useState<boolean>(false);
+  const [deploymentUrl, setDeploymentUrl] = useState<string>("");
+  const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
+
   // Auth guard and user state
   const [authLoading, setAuthLoading] = useState(true);
   const [userId, setUserId] = useState<string>("");
   const [isGuestUser, setIsGuestUser] = useState<boolean>(false);
 
-  // Authenticate session and load store state from localStorage
+  // Authenticate session and load store state — BACKEND IS THE SOURCE OF TRUTH
+  // On every load (including new devices), we fetch backend state first.
+  // localStorage is only used as an offline cache / fallback.
   useEffect(() => {
-    const initDashboard = () => {
+    let unsubscribeSse: (() => void) | null = null;
+
+    const initDashboard = async () => {
+      // Step 1: Read session identity from localStorage (always available after login)
       let currentUserId = "local_user";
       let storedShop = "OBSIDIAN Store";
       let storedType = "clothing";
@@ -134,14 +146,153 @@ export default function DashboardPage() {
         }
         setUserId(currentUserId);
 
+        storedShop = localStorage.getItem("shopName") || "OBSIDIAN Store";
+        storedType = localStorage.getItem("businessType") || "clothing";
+        storedCurrency = localStorage.getItem("storeCurrency") || localStorage.getItem("currency") || "₹";
+
+        const storedStoreId = localStorage.getItem("obsidian_store_id") || "";
+        if (storedStoreId) setBackendStoreId(storedStoreId);
+
+        const rawProducts = localStorage.getItem("obsidian_products") || localStorage.getItem("products");
+        if (rawProducts) {
+          const parsed = JSON.parse(rawProducts);
+          if (Array.isArray(parsed)) initialProducts = parsed;
+        }
+
+        const rawOrders = localStorage.getItem("obsidian_orders") || localStorage.getItem("orders");
+        if (rawOrders) {
+          const parsed = JSON.parse(rawOrders);
+          if (Array.isArray(parsed)) initialOrders = parsed;
+        }
+      } catch {
+        // ignore localStorage errors
+      }
+
+      // Step 2: Fetch backend state — this is the authoritative source of truth.
+      // Keep authLoading=true (spinner shown) until this resolves.
+      // On a new device the backend will identify the user via email header
+      // and return THAT USER'S actual data from Supabase — not empty state.
+      try {
+        const state = await api.getAccountState();
+        setIsBackendConnected(true);
+
+        // ── Hydrate user identity ──
+        if (state.user) {
+          if (state.user.fullName || state.user.ownerName) {
+            const name = state.user.fullName || state.user.ownerName;
+            setOwnerName(name);
+            localStorage.setItem("ownerName", name);
+          }
+        }
+
+        // ── Hydrate store profile from DB ──
+        if (state.store?.id) {
+          setBackendStoreId(state.store.id);
+          localStorage.setItem("obsidian_store_id", state.store.id);
+
+          if (state.store.slug) localStorage.setItem("storeSlug", state.store.slug);
+          if (state.store.live_url) setDeploymentUrl(state.store.live_url);
+
+          const serverShopName = state.store.name || state.store.shopName;
+          if (serverShopName) {
+            setShopName(serverShopName);
+            localStorage.setItem("shopName", serverShopName);
+          }
+
+          // Re-check ownerName from store if user didn't have it
+          if (state.store.ownerName) {
+            setOwnerName(state.store.ownerName);
+            localStorage.setItem("ownerName", state.store.ownerName);
+          }
+
+          if (state.store.businessType) {
+            setBusinessType(state.store.businessType);
+            localStorage.setItem("businessType", state.store.businessType);
+          }
+
+          const serverAddress = state.store.address || state.store.shopAddress;
+          if (serverAddress !== undefined) {
+            setShopAddress(serverAddress || "");
+            localStorage.setItem("shopAddress", serverAddress || "");
+          }
+
+          if (state.store.addressMethod) {
+            setAddressMethod(state.store.addressMethod);
+            localStorage.setItem("addressMethod", state.store.addressMethod);
+          }
+
+          if (state.store.currency) {
+            setCurrency(state.store.currency);
+            localStorage.setItem("storeCurrency", state.store.currency);
+            localStorage.setItem("currency", state.store.currency);
+          }
+
+          // ── Connect Real-Time SSE for live updates ──
+          unsubscribeSse = api.connectRealtime(state.store.id, (event) => {
+            if (event.type === "PRODUCT_CREATED" && event.payload?.product) {
+              setProducts((prev) => [event.payload.product, ...prev.filter((p) => p.id !== event.payload.product.id)]);
+            } else if (event.type === "PRODUCT_UPDATED" && event.payload?.product) {
+              setProducts((prev) => prev.map((p) => (p.id === event.payload.product.id ? event.payload.product : p)));
+            } else if (event.type === "PRODUCT_DELETED" && event.payload?.id) {
+              setProducts((prev) => prev.filter((p) => String(p.id) !== String(event.payload.id)));
+            } else if (event.type === "ORDER_CREATED" && event.payload?.order) {
+              setOrders((prev) => [event.payload.order, ...prev]);
+            } else if (event.type === "ORDER_UPDATED" && event.payload?.order) {
+              setOrders((prev) => prev.map((o) => (o.id === event.payload.order.id ? event.payload.order : o)));
+            } else if (event.type === "STOCK_UPDATED") {
+              setProducts((prev) =>
+                prev.map((p) => (String(p.id) === String(event.payload.productId) ? { ...p, stock: event.payload.stock } : p))
+              );
+            }
+          });
+        }
+
+        // ── Hydrate products from DB (authoritative) ──
+        if (Array.isArray(state.products) && state.products.length > 0) {
+          // Backend has data — use it regardless of what localStorage says
+          setProducts(state.products);
+          localStorage.setItem("obsidian_products", JSON.stringify(state.products));
+          localStorage.setItem("products", JSON.stringify(state.products));
+        } else if (initialProducts.length > 0 || initialOrders.length > 0) {
+          // Backend has no data for this user yet — import localStorage data into DB
+          // (This handles first login after migrating from offline mode)
+          try {
+            const imported = await api.importLocalState({
+              store: { name: storedShop, businessType: storedType, currency: storedCurrency },
+              products: initialProducts,
+              orders: initialOrders,
+            });
+            if (imported.state?.products) {
+              setProducts(imported.state.products);
+              localStorage.setItem("obsidian_products", JSON.stringify(imported.state.products));
+              localStorage.setItem("products", JSON.stringify(imported.state.products));
+            }
+          } catch {
+            // Keep local products if import fails
+            setProducts(initialProducts);
+          }
+        } else {
+          // No products anywhere — fresh account
+          setProducts([]);
+        }
+
+        // ── Hydrate orders from DB (authoritative) ──
+        if (Array.isArray(state.orders) && state.orders.length > 0) {
+          setOrders(state.orders);
+          localStorage.setItem("obsidian_orders", JSON.stringify(state.orders));
+          localStorage.setItem("orders", JSON.stringify(state.orders));
+        } else {
+          // No orders in DB
+          setOrders(initialOrders);
+        }
+
+      } catch {
+        // ── Offline fallback — backend unreachable ──
+        // Use whatever localStorage has (may be stale but better than nothing)
+        setIsBackendConnected(false);
+
         const storedOwner = localStorage.getItem("ownerName");
         if (storedOwner) setOwnerName(storedOwner);
-
-        storedShop = localStorage.getItem("shopName") || "OBSIDIAN Store";
-        setShopName(storedShop);
-
-        storedType = localStorage.getItem("businessType") || "clothing";
-        setBusinessType(storedType);
 
         const storedCustomType = localStorage.getItem("customBusinessType") || "";
         if (storedCustomType) setCustomBusinessType(storedCustomType);
@@ -160,30 +311,21 @@ export default function DashboardPage() {
         const storedAddress = localStorage.getItem("shopAddress") || "";
         setShopAddress(storedAddress);
 
-        storedCurrency = localStorage.getItem("storeCurrency") || localStorage.getItem("currency") || "₹";
+        setShopName(storedShop);
+        setBusinessType(storedType);
         setCurrency(storedCurrency);
-
-        const rawProducts = localStorage.getItem("obsidian_products") || localStorage.getItem("products");
-        if (rawProducts) {
-          const parsed = JSON.parse(rawProducts);
-          if (Array.isArray(parsed)) initialProducts = parsed;
-        }
         setProducts(initialProducts);
-
-        const rawOrders = localStorage.getItem("obsidian_orders") || localStorage.getItem("orders");
-        if (rawOrders) {
-          const parsed = JSON.parse(rawOrders);
-          if (Array.isArray(parsed)) initialOrders = parsed;
-        }
         setOrders(initialOrders);
-      } catch {
-        // ignore localStorage errors
       } finally {
         setAuthLoading(false);
       }
     };
 
     initDashboard();
+
+    return () => {
+      if (unsubscribeSse) unsubscribeSse();
+    };
   }, []);
 
   // Compute live storefront URL dynamically based on shopName and current origin
@@ -222,19 +364,40 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // Save changes helpers with localStorage persistence
+  // Save changes helpers with localStorage persistence and asynchronous backend sync
   const updateProductList = (newProducts: Product[]) => {
     setProducts(newProducts);
     localStorage.setItem("obsidian_products", JSON.stringify(newProducts));
     localStorage.setItem("products", JSON.stringify(newProducts));
+    api.updateAccountState({ products: newProducts }).catch(() => {});
   };
 
   const updateOrderList = (newOrders: Order[]) => {
     setOrders(newOrders);
     localStorage.setItem("obsidian_orders", JSON.stringify(newOrders));
     localStorage.setItem("orders", JSON.stringify(newOrders));
+    api.updateAccountState({ orders: newOrders }).catch(() => {});
   };
 
+  // Vercel Deployment Trigger
+  const handleDeployToVercel = async () => {
+    setIsDeploying(true);
+    triggerToast("Compiling storefront & deploying to Vercel... 🚀");
+    try {
+      const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id") || "default";
+      const res = await api.deployStore(targetStoreId);
+      if (res.liveUrl) {
+        setDeploymentUrl(res.liveUrl);
+        triggerToast(`Live on Vercel: ${res.liveUrl} 🎉`);
+      } else {
+        triggerToast("Deployment successfully submitted to Vercel! ✨");
+      }
+    } catch (err: any) {
+      triggerToast(err.message || "Deployment initiated (simulated mode)");
+    } finally {
+      setIsDeploying(false);
+    }
+  };
 
   // Dynamic Statistics
   const totalProducts = products.length;
@@ -531,6 +694,10 @@ export default function DashboardPage() {
     if (confirm("Clear all products and orders? This cannot be undone.")) {
       updateProductList([]);
       updateOrderList([]);
+      if (backendStoreId) {
+        api.clearProducts(backendStoreId).catch(() => {});
+        api.clearOrders(backendStoreId).catch(() => {});
+      }
       triggerToast("All data cleared");
     }
   };
@@ -551,6 +718,19 @@ export default function DashboardPage() {
     localStorage.setItem("shopAddress", shopAddress.trim());
     localStorage.setItem("storeCurrency", currency);
     localStorage.setItem("currency", currency);
+
+    api.updateAccountState({
+      store: {
+        ownerName: ownerName.trim(),
+        name: shopName.trim(),
+        businessType: finalBusinessType,
+        customBusinessType: customBusinessType.trim(),
+        customOptions,
+        addressMethod,
+        address: shopAddress.trim(),
+        currency,
+      },
+    }).catch(() => {});
 
     triggerToast("Store profile & configuration saved! ✅");
   };
@@ -738,6 +918,54 @@ export default function DashboardPage() {
           </div>
 
           <div className="db-topbar-actions">
+            {/* Vercel Deployment Action */}
+            <button
+              onClick={handleDeployToVercel}
+              disabled={isDeploying}
+              type="button"
+              className="stitch-refresh-btn"
+              style={{
+                background: "linear-gradient(135deg, #0b1120 0%, #1e293b 100%)",
+                border: "1px solid rgba(56, 189, 248, 0.4)",
+                color: "#38bdf8",
+                fontWeight: 700,
+                fontSize: "0.74rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "6px 14px",
+                borderRadius: "8px",
+              }}
+              title="Compile and deploy live storefront directly to Vercel"
+            >
+              <span>{isDeploying ? "⏳" : "▲"}</span>
+              <span>{isDeploying ? "Deploying..." : "Deploy to Vercel"}</span>
+            </button>
+
+            {/* Swagger API Docs */}
+            <a
+              href="/docs"
+              target="_blank"
+              rel="noreferrer"
+              className="stitch-refresh-btn"
+              style={{
+                textDecoration: "none",
+                fontSize: "0.74rem",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "6px 12px",
+                background: "rgba(255, 255, 255, 0.05)",
+                color: "#94a3b8",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+                borderRadius: "8px",
+              }}
+              title="Open OpenAPI Swagger Specification"
+            >
+              <span>⚡</span>
+              <span>Swagger API</span>
+            </a>
+
             {activeTab === "overview" && (
               <button
                 className="stitch-refresh-btn"
@@ -754,6 +982,7 @@ export default function DashboardPage() {
                 Refresh
               </button>
             )}
+
 
             {/* Profile Chip */}
             <div className="db-profile-chip">

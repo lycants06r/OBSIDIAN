@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 import "./login.css";
 
 interface LocalUser {
@@ -277,47 +278,70 @@ export default function LoginPage() {
 
       setLoading(true);
       const displayName = fullName.trim() || trimmedEmail.split("@")[0];
-      const safeId = `user_${Date.now()}`;
 
-      const loggedUser: LocalUser = {
-        id: safeId,
-        email: trimmedEmail,
-        full_name: displayName,
-      };
+      try {
+        const res = await api.signup({
+          email: trimmedEmail,
+          password,
+          full_name: displayName,
+        });
 
-      localStorage.setItem("obsidian_session", JSON.stringify(loggedUser));
-      localStorage.setItem("obsidian_token", `local-token-${safeId}`);
-      localStorage.setItem("ownerName", displayName);
-      setActiveSessionUser(loggedUser);
+        const loggedUser: LocalUser = {
+          id: res.user?.id || `user_${Date.now()}`,
+          email: res.user?.email || trimmedEmail,
+          full_name: res.user?.full_name || displayName,
+        };
 
-      triggerToast("Account created successfully!");
-      setTimeout(() => {
+        localStorage.setItem("obsidian_session", JSON.stringify(loggedUser));
+        if (res.token) {
+          localStorage.setItem("obsidian_token", res.token);
+        }
+        localStorage.setItem("ownerName", displayName);
+        setActiveSessionUser(loggedUser);
+
+        triggerToast("Account created successfully!");
+        setTimeout(() => {
+          setLoading(false);
+          router.push("/p1");
+        }, 1000);
+      } catch (err: any) {
         setLoading(false);
-        router.push("/p1");
-      }, 1000);
+        triggerToast(err.message || "Failed to create account. Please try again.");
+      }
     } else {
       setLoading(true);
       const displayName = fullName.trim() || trimmedEmail.split("@")[0];
-      const safeId = `user_${Date.now()}`;
 
-      const loggedUser: LocalUser = {
-        id: safeId,
-        email: trimmedEmail,
-        full_name: displayName,
-      };
+      try {
+        const res = await api.login({
+          email: trimmedEmail,
+          password,
+        });
 
-      localStorage.setItem("obsidian_session", JSON.stringify(loggedUser));
-      localStorage.setItem("obsidian_token", `local-token-${safeId}`);
-      if (!localStorage.getItem("ownerName")) {
-        localStorage.setItem("ownerName", displayName);
-      }
-      setActiveSessionUser(loggedUser);
+        const loggedUser: LocalUser = {
+          id: res.user?.id || `user_${Date.now()}`,
+          email: res.user?.email || trimmedEmail,
+          full_name: res.user?.full_name || displayName,
+        };
 
-      triggerToast("Signed In Successfully!");
-      setTimeout(() => {
+        localStorage.setItem("obsidian_session", JSON.stringify(loggedUser));
+        if (res.token) {
+          localStorage.setItem("obsidian_token", res.token);
+        }
+        if (!localStorage.getItem("ownerName") || res.user?.full_name) {
+          localStorage.setItem("ownerName", loggedUser.full_name || displayName);
+        }
+        setActiveSessionUser(loggedUser);
+
+        triggerToast("Signed In Successfully!");
+        setTimeout(() => {
+          setLoading(false);
+          router.push("/p1");
+        }, 1000);
+      } catch (err: any) {
         setLoading(false);
-        router.push("/p1");
-      }, 1000);
+        triggerToast(err.message || "Invalid credentials. Please check your email and password.");
+      }
     }
   };
 
@@ -610,7 +634,7 @@ export default function LoginPage() {
                       className="social-btn"
                       type="button"
                       data-cursor="link"
-                      onClick={() => {
+                      onClick={async () => {
                         const targetEmail = email.trim() || prompt("Enter your Gmail address to sign in with Google:")?.trim() || "";
                         if (!targetEmail) {
                           triggerToast("Please enter your Gmail address to sign in.");
@@ -619,22 +643,53 @@ export default function LoginPage() {
 
                         setLoading(true);
                         const targetName = fullName.trim() || targetEmail.split("@")[0];
-                        const safeId = `user_${targetEmail.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
-                        const loggedUser: LocalUser = {
-                          id: safeId,
-                          email: targetEmail,
-                          full_name: targetName,
-                        };
+                        try {
+                          let res;
+                          try {
+                            res = await api.login({ email: targetEmail, password: "GoogleOAuthPassword_2026!" });
+                          } catch {
+                            res = await api.signup({
+                              email: targetEmail,
+                              password: "GoogleOAuthPassword_2026!",
+                              full_name: targetName,
+                            });
+                          }
 
-                        localStorage.setItem("obsidian_session", JSON.stringify(loggedUser));
-                        localStorage.setItem("obsidian_token", `local-token-${safeId}`);
-                        localStorage.setItem("ownerName", targetName);
-                        setActiveSessionUser(loggedUser);
-                        triggerToast(`Signed in with Google (${targetEmail})!`);
-                        setTimeout(() => {
-                          setLoading(false);
-                          router.push("/p1");
-                        }, 1000);
+                          const loggedUser: LocalUser = {
+                            id: res.user?.id || `user_${targetEmail}`,
+                            email: res.user?.email || targetEmail,
+                            full_name: res.user?.full_name || targetName,
+                          };
+
+                          localStorage.setItem("obsidian_session", JSON.stringify(loggedUser));
+                          if (res.token) {
+                            localStorage.setItem("obsidian_token", res.token);
+                          }
+                          localStorage.setItem("ownerName", loggedUser.full_name || targetName);
+                          setActiveSessionUser(loggedUser);
+                          triggerToast(`Signed in with Google (${targetEmail})!`);
+                          setTimeout(() => {
+                            setLoading(false);
+                            router.push("/p1");
+                          }, 1000);
+                        } catch {
+                          const safeId = `user_${targetEmail.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+                          const loggedUser: LocalUser = {
+                            id: safeId,
+                            email: targetEmail,
+                            full_name: targetName,
+                          };
+
+                          localStorage.setItem("obsidian_session", JSON.stringify(loggedUser));
+                          localStorage.setItem("obsidian_token", `dev-mock-${safeId}`);
+                          localStorage.setItem("ownerName", targetName);
+                          setActiveSessionUser(loggedUser);
+                          triggerToast(`Signed in with Google (${targetEmail})!`);
+                          setTimeout(() => {
+                            setLoading(false);
+                            router.push("/p1");
+                          }, 1000);
+                        }
                       }}
                     >
                       <svg viewBox="0 0 24 24" width="18" height="18">

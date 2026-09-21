@@ -18,6 +18,9 @@ export default function SiteFooter() {
         <a href="/checkout.html" target="_blank" rel="noopener noreferrer" data-cursor="link">
           Checkout
         </a>
+        <a href="/api/docs" target="_blank" rel="noopener noreferrer" data-cursor="link">
+          Swagger API ↗
+        </a>
         <Link href="/" data-cursor="link">
           Sign In
         </Link>

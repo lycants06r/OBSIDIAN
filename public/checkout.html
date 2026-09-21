@@ -405,6 +405,29 @@
                 }
             } catch (err) { }
 
+            // Asynchronously dispatch order to backend API
+            const backendBaseUrl = window.location.origin;
+            const targetStoreId = localStorage.getItem("obsidian_store_id") || localStorage.getItem("storeId") || "default";
+            try {
+                fetch(`${backendBaseUrl}/api/stores/${encodeURIComponent(targetStoreId)}/orders`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        id: newOrder.id,
+                        customerName: newOrder.customerName,
+                        productName: newOrder.productName,
+                        productId: newOrder.productId,
+                        quantity: newOrder.quantity,
+                        totalPrice: newOrder.totalPrice,
+                        status: newOrder.status,
+                    }),
+                }).catch(() => {
+                    // Fail silently into local storage
+                });
+            } catch (err) {
+                // Ignore network errors in offline mode
+            }
+
             // Display success screen
             document.getElementById("checkoutMain").style.display = "none";
             document.getElementById("orderSuccess").style.display = "block";

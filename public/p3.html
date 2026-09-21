@@ -1626,6 +1626,50 @@
         renderProducts();
         renderCart();
 
+        // Check if a store slug is specified in URL (e.g. ?slug=my-store) or saved
+        async function fetchLiveStoreData() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const slug = urlParams.get("slug") || localStorage.getItem("storeSlug");
+            if (!slug) return;
+
+            try {
+                const res = await fetch(`${window.location.origin}/api/public/store/${encodeURIComponent(slug)}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.store) {
+                        localStorage.setItem("shopName", data.store.name || "My Store");
+                        if (data.store.business_type) localStorage.setItem("businessType", data.store.business_type);
+                        if (data.store.currency) localStorage.setItem("storeCurrency", data.store.currency);
+                        if (data.store.id) localStorage.setItem("obsidian_store_id", data.store.id);
+                    }
+                    if (Array.isArray(data.products) && data.products.length > 0) {
+                        const formattedProducts = data.products.map(p => ({
+                            id: p.client_id || p.id,
+                            name: p.name,
+                            price: p.price,
+                            discountPrice: p.discount_price || p.discountPrice,
+                            stock: p.stock ?? 10,
+                            emoji: p.emoji || '📦',
+                            category: p.category || 'General',
+                            description: p.description || '',
+                            image: p.image_url || p.image || null,
+                            status: p.status || 'active'
+                        }));
+                        products = formattedProducts;
+                        localStorage.setItem("products", JSON.stringify(formattedProducts));
+                        localStorage.setItem("obsidian_products", JSON.stringify(formattedProducts));
+                    }
+                    refreshStoreMeta();
+                    renderCategories();
+                    renderProducts();
+                }
+            } catch (err) {
+                // Ignore network errors; fallback gracefully to localStorage
+            }
+        }
+
+        fetchLiveStoreData();
+
         // Listen for store modifications in other tabs or windows (e.g. businessman adding products in Dashboard)
         function liveSync() {
             products = getStoredProducts();
