@@ -82,6 +82,14 @@ export default function DashboardPage() {
   const [formEmoji, setFormEmoji] = useState("📦");
   const [formCategory, setFormCategory] = useState("General");
   const [formDesc, setFormDesc] = useState("");
+  const [formImage, setFormImage] = useState("");
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // Store Media States (Supabase Storage)
+  const [logoUrl, setLogoUrl] = useState("");
+  const [bannerUrl, setBannerUrl] = useState("");
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
 
   // Form States for Order Modal
   const [orderCustomer, setOrderCustomer] = useState("");
@@ -225,6 +233,15 @@ export default function DashboardPage() {
             setCurrency(state.store.currency);
             localStorage.setItem("storeCurrency", state.store.currency);
             localStorage.setItem("currency", state.store.currency);
+          }
+
+          if (state.store.logo_url) {
+            setLogoUrl(state.store.logo_url);
+            localStorage.setItem("storeLogo", state.store.logo_url);
+          }
+          if (state.store.banner_url) {
+            setBannerUrl(state.store.banner_url);
+            localStorage.setItem("storeBanner", state.store.banner_url);
           }
 
           // ── Connect Real-Time SSE for live updates ──
@@ -399,6 +416,87 @@ export default function DashboardPage() {
     }
   };
 
+  // Supabase Storage Asset Upload Handlers
+  const handleUploadProductImage = async (file: File) => {
+    if (!file) return;
+    if (!file.type.match(/^image\/(jpeg|png|webp|gif|svg\+xml)$/i)) {
+      triggerToast("Please select a JPEG, PNG, WebP, or SVG image");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      triggerToast("File size must be under 5MB");
+      return;
+    }
+    setIsUploadingImage(true);
+    triggerToast("Uploading product image to Supabase Storage... ☁️");
+    try {
+      const storeId = backendStoreId || localStorage.getItem("obsidian_store_id") || "default";
+      const res = await api.uploadAsset(storeId, file, "product");
+      if (res.url) {
+        setFormImage(res.url);
+        triggerToast("Product image uploaded to Supabase Storage! ✨");
+      }
+    } catch (err: any) {
+      triggerToast(err.message || "Failed to upload image");
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleUploadLogo = async (file: File) => {
+    if (!file) return;
+    if (!file.type.match(/^image\/(jpeg|png|webp|gif|svg\+xml)$/i)) {
+      triggerToast("Please select a JPEG, PNG, WebP, or SVG image");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      triggerToast("File size must be under 5MB");
+      return;
+    }
+    setIsUploadingLogo(true);
+    triggerToast("Uploading logo to Supabase Storage... ☁️");
+    try {
+      const storeId = backendStoreId || localStorage.getItem("obsidian_store_id") || "default";
+      const res = await api.uploadAsset(storeId, file, "logo");
+      if (res.url) {
+        setLogoUrl(res.url);
+        localStorage.setItem("storeLogo", res.url);
+        triggerToast("Store logo uploaded & saved! ✨");
+      }
+    } catch (err: any) {
+      triggerToast(err.message || "Failed to upload logo");
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
+  const handleUploadBanner = async (file: File) => {
+    if (!file) return;
+    if (!file.type.match(/^image\/(jpeg|png|webp|gif|svg\+xml)$/i)) {
+      triggerToast("Please select a JPEG, PNG, WebP, or SVG image");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      triggerToast("File size must be under 5MB");
+      return;
+    }
+    setIsUploadingBanner(true);
+    triggerToast("Uploading banner to Supabase Storage... ☁️");
+    try {
+      const storeId = backendStoreId || localStorage.getItem("obsidian_store_id") || "default";
+      const res = await api.uploadAsset(storeId, file, "banner");
+      if (res.url) {
+        setBannerUrl(res.url);
+        localStorage.setItem("storeBanner", res.url);
+        triggerToast("Store banner uploaded & saved! ✨");
+      }
+    } catch (err: any) {
+      triggerToast(err.message || "Failed to upload banner");
+    } finally {
+      setIsUploadingBanner(false);
+    }
+  };
+
   // Dynamic Statistics
   const totalProducts = products.length;
   const totalStockCount = products.reduce((acc, p) => acc + p.stock, 0);
@@ -538,6 +636,7 @@ export default function DashboardPage() {
             emoji: formEmoji || "📦",
             category: formCategory || "General",
             description: formDesc.trim(),
+            image: formImage.trim() || undefined,
             status: "active",
           }
           : p
@@ -553,6 +652,7 @@ export default function DashboardPage() {
         emoji: formEmoji || "📦",
         category: formCategory || "General",
         description: formDesc.trim(),
+        image: formImage.trim() || undefined,
         status: "active",
       };
       updateProductList([newProd, ...products]);
@@ -567,6 +667,7 @@ export default function DashboardPage() {
     setFormEmoji("📦");
     setFormCategory("General");
     setFormDesc("");
+    setFormImage("");
   };
 
   const openAddProductModal = () => {
@@ -577,6 +678,7 @@ export default function DashboardPage() {
     setFormEmoji("✨");
     setFormCategory("Apparel");
     setFormDesc("");
+    setFormImage("");
     setShowProductModal(true);
   };
 
@@ -588,6 +690,7 @@ export default function DashboardPage() {
     setFormEmoji(product.emoji);
     setFormCategory(product.category);
     setFormDesc(product.description || "");
+    setFormImage(product.image || "");
     setShowProductModal(true);
   };
 
@@ -729,6 +832,8 @@ export default function DashboardPage() {
         addressMethod,
         address: shopAddress.trim(),
         currency,
+        logo_url: logoUrl || null,
+        banner_url: bannerUrl || null,
       },
     }).catch(() => {});
 
@@ -2143,6 +2248,127 @@ export default function DashboardPage() {
                 </span>
               </div>
 
+              {/* Store Branding & Media Assets (Supabase Storage) */}
+              <div
+                style={{
+                  marginTop: "18px",
+                  padding: "16px",
+                  borderRadius: "12px",
+                  background: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                }}
+              >
+                <h4
+                  style={{
+                    fontSize: "0.88rem",
+                    fontWeight: 700,
+                    color: "var(--nm-text-dark)",
+                    marginBottom: "14px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <span>🖼️</span> Store Branding & Media Assets (Supabase Storage)
+                </h4>
+
+                <div className="db-form-row">
+                  {/* Store Logo */}
+                  <div className="db-form-group">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <label style={{ margin: 0 }}>Store Logo</label>
+                      {logoUrl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setLogoUrl("");
+                            localStorage.removeItem("storeLogo");
+                          }}
+                          style={{ background: "none", border: "none", color: "#ef4444", fontSize: "0.72rem", cursor: "pointer", fontWeight: 600 }}
+                        >
+                          ✕ Remove
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                      {logoUrl ? (
+                        <div style={{ width: "48px", height: "48px", borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}>
+                          <img src={logoUrl} alt="Store logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        </div>
+                      ) : (
+                        <div style={{ width: "48px", height: "48px", borderRadius: "8px", border: "1px dashed rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+                          🏷️
+                        </div>
+                      )}
+                      <label
+                        className="db-btn db-btn-secondary"
+                        style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: isUploadingLogo ? "wait" : "pointer", fontSize: "0.76rem", padding: "6px 12px" }}
+                      >
+                        <span>{isUploadingLogo ? "⏳" : "☁️"}</span>
+                        <span>{isUploadingLogo ? "Uploading..." : "Upload Logo"}</span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                          style={{ display: "none" }}
+                          disabled={isUploadingLogo}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadLogo(file);
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Store Banner */}
+                  <div className="db-form-group">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                      <label style={{ margin: 0 }}>Store Banner</label>
+                      {bannerUrl && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setBannerUrl("");
+                            localStorage.removeItem("storeBanner");
+                          }}
+                          style={{ background: "none", border: "none", color: "#ef4444", fontSize: "0.72rem", cursor: "pointer", fontWeight: 600 }}
+                        >
+                          ✕ Remove
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                      {bannerUrl ? (
+                        <div style={{ width: "72px", height: "48px", borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}>
+                          <img src={bannerUrl} alt="Store banner" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        </div>
+                      ) : (
+                        <div style={{ width: "72px", height: "48px", borderRadius: "8px", border: "1px dashed rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+                          🌆
+                        </div>
+                      )}
+                      <label
+                        className="db-btn db-btn-secondary"
+                        style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: isUploadingBanner ? "wait" : "pointer", fontSize: "0.76rem", padding: "6px 12px" }}
+                      >
+                        <span>{isUploadingBanner ? "⏳" : "☁️"}</span>
+                        <span>{isUploadingBanner ? "Uploading..." : "Upload Banner"}</span>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                          style={{ display: "none" }}
+                          disabled={isUploadingBanner}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUploadBanner(file);
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Action Buttons */}
               <div style={{ marginTop: 24, display: "flex", gap: 12, alignItems: "center" }}>
                 <button type="submit" className="db-btn db-btn-primary" data-cursor="link">
@@ -2249,6 +2475,70 @@ export default function DashboardPage() {
                   onChange={(e) => setFormDesc(e.target.value)}
                   className="db-form-textarea"
                 />
+              </div>
+
+              {/* Product Image (Supabase Storage Upload) */}
+              <div className="db-form-group">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <label style={{ margin: 0 }}>Product Image (Supabase Storage)</label>
+                  {formImage && (
+                    <button
+                      type="button"
+                      onClick={() => setFormImage("")}
+                      style={{ background: "none", border: "none", color: "#ef4444", fontSize: "0.72rem", cursor: "pointer", fontWeight: 600 }}
+                    >
+                      ✕ Remove
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+                  {formImage ? (
+                    <div style={{ width: "52px", height: "52px", borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}>
+                      <img src={formImage} alt="Preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </div>
+                  ) : (
+                    <div style={{ width: "52px", height: "52px", borderRadius: "8px", border: "1px dashed rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+                      📷
+                    </div>
+                  )}
+
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <label
+                      className="db-btn db-btn-secondary"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        cursor: isUploadingImage ? "wait" : "pointer",
+                        fontSize: "0.76rem",
+                        padding: "6px 12px",
+                        width: "fit-content",
+                      }}
+                    >
+                      <span>{isUploadingImage ? "⏳" : "☁️"}</span>
+                      <span>{isUploadingImage ? "Uploading..." : "Upload from Device"}</span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                        style={{ display: "none" }}
+                        disabled={isUploadingImage}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleUploadProductImage(file);
+                        }}
+                      />
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="Or paste image URL (https://...)"
+                      value={formImage}
+                      onChange={(e) => setFormImage(e.target.value)}
+                      className="db-form-input"
+                      style={{ fontSize: "0.78rem", padding: "6px 10px" }}
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="db-modal-footer">
