@@ -1047,30 +1047,6 @@ export default function DashboardPage() {
               <span>{isDeploying ? "Deploying..." : "Deploy to Vercel"}</span>
             </button>
 
-            {/* Swagger API Docs */}
-            <a
-              href="/docs"
-              target="_blank"
-              rel="noreferrer"
-              className="stitch-refresh-btn"
-              style={{
-                textDecoration: "none",
-                fontSize: "0.74rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "5px",
-                padding: "6px 12px",
-                background: "rgba(255, 255, 255, 0.05)",
-                color: "#94a3b8",
-                border: "1px solid rgba(255, 255, 255, 0.12)",
-                borderRadius: "8px",
-              }}
-              title="Open OpenAPI Swagger Specification"
-            >
-              <span>⚡</span>
-              <span>Swagger API</span>
-            </a>
-
             {activeTab === "overview" && (
               <button
                 className="stitch-refresh-btn"
