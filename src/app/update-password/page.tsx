@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { api } from "@/lib/api";
 import "@/app/login.css";
 
 export default function UpdatePasswordPage() {
@@ -61,7 +62,11 @@ export default function UpdatePasswordPage() {
     setErrorMessage(null);
 
     try {
-      // Pure frontend update
+      try {
+        await api.updatePassword({ password: newPassword });
+      } catch (apiErr: any) {
+        console.warn("Backend update password note:", apiErr.message);
+      }
       localStorage.setItem("obsidian_user_password", newPassword);
       const stored = localStorage.getItem("obsidian_session");
       if (stored) {

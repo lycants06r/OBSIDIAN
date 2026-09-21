@@ -3,9 +3,7 @@ import type { NextConfig } from "next";
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === "production"
-    ? "https://obsidian-backend-1.onrender.com"
-    : "http://localhost:4000");
+  "https://obsidian-backend-1.onrender.com";
 
 const nextConfig: NextConfig = {
   reactStrictMode: false,
