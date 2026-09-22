@@ -19,7 +19,7 @@ interface Product {
   brand?: string;
   types?: string[];
   emoji?: string;
-  category?: string;
+  category: string;
   description?: string;
   status?: string;
   discountPrice?: number;
@@ -541,7 +541,7 @@ export default function DashboardPage() {
   const selectAllTemplates = () => {
     const filtered = sampleCategoryFilter === "all"
       ? SAMPLE_CATALOG_TEMPLATES
-      : SAMPLE_CATALOG_TEMPLATES.filter(t => t.category.toLowerCase() === sampleCategoryFilter.toLowerCase());
+      : SAMPLE_CATALOG_TEMPLATES.filter(t => (t.category || "").toLowerCase() === sampleCategoryFilter.toLowerCase());
     setSelectedTemplateIds(filtered.map((t) => t.id));
   };
 
@@ -911,7 +911,7 @@ export default function DashboardPage() {
   const filteredProducts = products.filter(
     (p) =>
       p.name.toLowerCase().includes(productSearch.toLowerCase()) ||
-      p.category.toLowerCase().includes(productSearch.toLowerCase())
+      (p.category || "").toLowerCase().includes(productSearch.toLowerCase())
   );
 
   // Filtered Orders
@@ -2897,7 +2897,7 @@ export default function DashboardPage() {
             <div className="db-sample-grid">
               {SAMPLE_CATALOG_TEMPLATES.filter((item) => {
                 if (sampleCategoryFilter === "all") return true;
-                return item.category.toLowerCase() === sampleCategoryFilter.toLowerCase();
+                return (item.category || "").toLowerCase() === sampleCategoryFilter.toLowerCase();
               }).map((template) => {
                 const isSelected = selectedTemplateIds.includes(template.id);
                 return (
