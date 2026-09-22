@@ -1023,29 +1023,6 @@ export default function DashboardPage() {
           </div>
 
           <div className="db-topbar-actions">
-            {/* Vercel Deployment Action */}
-            <button
-              onClick={handleDeployToVercel}
-              disabled={isDeploying}
-              type="button"
-              className="stitch-refresh-btn"
-              style={{
-                background: "linear-gradient(135deg, #0b1120 0%, #1e293b 100%)",
-                border: "1px solid rgba(56, 189, 248, 0.4)",
-                color: "#38bdf8",
-                fontWeight: 700,
-                fontSize: "0.74rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "6px 14px",
-                borderRadius: "8px",
-              }}
-              title="Compile and deploy live storefront directly to Vercel"
-            >
-              <span>{isDeploying ? "⏳" : "▲"}</span>
-              <span>{isDeploying ? "Deploying..." : "Deploy to Vercel"}</span>
-            </button>
 
             {activeTab === "overview" && (
               <button
