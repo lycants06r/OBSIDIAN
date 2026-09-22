@@ -931,38 +931,20 @@ export default function DashboardPage() {
 
   if (authLoading) {
     return (
-      <div
-        style={{
-          minHeight: "100vh",
-          backgroundColor: "#080c14",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#94a3b8",
-          fontFamily: "var(--font-inter, sans-serif)",
-          fontSize: "0.95rem",
-          letterSpacing: "0.05em",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div
-            style={{
-              width: "18px",
-              height: "18px",
-              borderRadius: "50%",
-              border: "2px solid rgba(255, 255, 255, 0.2)",
-              borderTopColor: "#fa709a",
-              animation: "spin 0.8s linear infinite",
-            }}
-          />
-          <span>Verifying session...</span>
+      <div className="db-loading-screen">
+        <div className="db-loading-card">
+          <div className="db-loading-spinner" />
+          <div className="db-loading-text">
+            <strong>OBSIDIAN</strong>
+            <span>Verifying merchant session...</span>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`dashboard-root ${activeTab === "overview" ? "db-theme-white" : ""}`}>
+    <div className="dashboard-root">
       {/* Ambient background blur circles */}
       <div className="db-ambient-glow db-ambient-1" />
       <div className="db-ambient-glow db-ambient-2" />
@@ -2271,11 +2253,12 @@ export default function DashboardPage() {
               {/* Store Branding & Media Assets (Supabase Storage) */}
               <div
                 style={{
-                  marginTop: "18px",
-                  padding: "16px",
-                  borderRadius: "12px",
-                  background: "rgba(255, 255, 255, 0.03)",
-                  border: "1px solid rgba(255, 255, 255, 0.08)",
+                  marginTop: "20px",
+                  padding: "20px",
+                  borderRadius: "var(--nm-radius-lg)",
+                  background: "var(--nm-bg)",
+                  boxShadow: "var(--nm-shadow-in)",
+                  border: "1px solid rgba(255, 255, 255, 0.7)",
                 }}
               >
                 <h4
@@ -2312,17 +2295,17 @@ export default function DashboardPage() {
                     </div>
                     <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                       {logoUrl ? (
-                        <div style={{ width: "48px", height: "48px", borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}>
+                        <div style={{ width: "52px", height: "52px", borderRadius: "12px", overflow: "hidden", boxShadow: "var(--nm-shadow-out)", border: "1px solid rgba(255,255,255,0.8)", flexShrink: 0 }}>
                           <img src={logoUrl} alt="Store logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                         </div>
                       ) : (
-                        <div style={{ width: "48px", height: "48px", borderRadius: "8px", border: "1px dashed rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+                        <div style={{ width: "52px", height: "52px", borderRadius: "12px", background: "var(--nm-bg)", boxShadow: "var(--nm-shadow-out)", border: "1px solid rgba(255,255,255,0.8)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", flexShrink: 0 }}>
                           🏷️
                         </div>
                       )}
                       <label
                         className="db-btn db-btn-secondary"
-                        style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: isUploadingLogo ? "wait" : "pointer", fontSize: "0.76rem", padding: "6px 12px" }}
+                        style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: isUploadingLogo ? "wait" : "pointer", fontSize: "0.76rem", padding: "8px 14px" }}
                       >
                         <span>{isUploadingLogo ? "⏳" : "☁️"}</span>
                         <span>{isUploadingLogo ? "Uploading..." : "Upload Logo"}</span>
@@ -2359,17 +2342,17 @@ export default function DashboardPage() {
                     </div>
                     <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
                       {bannerUrl ? (
-                        <div style={{ width: "72px", height: "48px", borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}>
+                        <div style={{ width: "76px", height: "52px", borderRadius: "12px", overflow: "hidden", boxShadow: "var(--nm-shadow-out)", border: "1px solid rgba(255,255,255,0.8)", flexShrink: 0 }}>
                           <img src={bannerUrl} alt="Store banner" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                         </div>
                       ) : (
-                        <div style={{ width: "72px", height: "48px", borderRadius: "8px", border: "1px dashed rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
+                        <div style={{ width: "76px", height: "52px", borderRadius: "12px", background: "var(--nm-bg)", boxShadow: "var(--nm-shadow-out)", border: "1px solid rgba(255,255,255,0.8)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem", flexShrink: 0 }}>
                           🌆
                         </div>
                       )}
                       <label
                         className="db-btn db-btn-secondary"
-                        style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: isUploadingBanner ? "wait" : "pointer", fontSize: "0.76rem", padding: "6px 12px" }}
+                        style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: isUploadingBanner ? "wait" : "pointer", fontSize: "0.76rem", padding: "8px 14px" }}
                       >
                         <span>{isUploadingBanner ? "⏳" : "☁️"}</span>
                         <span>{isUploadingBanner ? "Uploading..." : "Upload Banner"}</span>
@@ -3079,7 +3062,7 @@ export default function DashboardPage() {
 
       {/* ── STOREFRONT QR CODE MODAL ── */}
       {showQrModal && (
-        <div className="db-modal-overlay" onClick={() => setShowQrModal(false)}>
+        <div className="db-modal-backdrop" onClick={() => setShowQrModal(false)}>
           <div className="db-modal stitch-qr-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 440 }}>
             <div className="db-modal-header" style={{ borderBottom: "1px solid var(--nm-border-inner)", paddingBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

@@ -1477,139 +1477,63 @@
 }
 
 /* ══════════════════════════════════════════════════════════
-   STITCH GLASSMORPHISM DESIGN SYSTEM (WHITE OVERVIEW THEME)
-   Aesthetic: Pristine White Glassmorphism / Luxury Light Editorial
-   Fits natively into dashboard workspace
+   NEUMORPHIC LOADING & SESSION VERIFICATION
    ══════════════════════════════════════════════════════════ */
-
-.dashboard-root.db-theme-white {
-  background-color: #f8fafc;
-  background-image:
-    radial-gradient(at 0% 0%, rgba(241, 245, 249, 1) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(238, 242, 255, 0.7) 0px, transparent 45%),
-    radial-gradient(at 50% 100%, rgba(248, 250, 252, 1) 0px, transparent 60%);
-  color: #0f172a;
-}
-
-.dashboard-root.db-theme-white .db-sidebar {
-  width: 240px;
-  background: #ffffff;
-  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.03);
-  border-right: 1px solid #e2e8f0;
-  padding: 20px 14px;
-}
-
-.dashboard-root.db-theme-white .db-brand-title {
-  color: #0f172a;
-  font-size: 1.2rem;
-}
-
-.dashboard-root.db-theme-white .db-nav-item {
-  color: #64748b;
-  border: 1px solid transparent;
-  padding: 9px 12px;
-  font-size: 0.82rem;
-}
-
-.dashboard-root.db-theme-white .db-nav-item:hover {
-  color: #0f172a;
-  background: #f8fafc;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  border-color: #e2e8f0;
-  transform: translateX(2px);
-}
-
-.dashboard-root.db-theme-white .db-nav-item.active {
-  background: #f1f5f9;
-  color: #7c3aed;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
-  border-color: rgba(124, 58, 237, 0.2);
-}
-
-.dashboard-root.db-theme-white .db-store-status {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  box-shadow: none;
-  padding: 8px 10px;
-  font-size: 0.76rem;
-}
-
-.dashboard-root.db-theme-white .db-main {
-  margin-left: 240px;
-  width: calc(100% - 240px);
-  padding: 14px 22px 18px;
+.db-loading-screen {
   min-height: 100vh;
-  box-sizing: border-box;
-  overflow-x: hidden;
+  background-color: var(--nm-bg);
+  background-image:
+    radial-gradient(at 5% 5%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+    radial-gradient(at 95% 90%, rgba(6, 182, 212, 0.06) 0px, transparent 50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Nunito', 'Inter', system-ui, sans-serif;
 }
 
-.dashboard-root.db-theme-white .db-topbar {
-  margin-bottom: 12px;
-  gap: 12px;
+.db-loading-card {
+  background: var(--nm-bg);
+  box-shadow: var(--nm-shadow-out-xl);
+  border-radius: var(--nm-radius-xl);
+  padding: 36px 48px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  animation: fadeIn 0.3s ease;
 }
 
-.dashboard-root.db-theme-white .db-welcome-title {
-  color: #0f172a;
-  font-size: 1.35rem;
-  letter-spacing: -0.02em;
+.db-loading-spinner {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3.5px solid #cdd5e0;
+  border-top-color: var(--nm-accent);
+  box-shadow: var(--nm-shadow-in-sm);
+  animation: nmSpin 0.9s cubic-bezier(0.5, 0, 0.5, 1) infinite;
 }
 
-.dashboard-root.db-theme-white .db-welcome-sub {
-  color: #64748b;
-  font-size: 0.78rem;
-  margin-top: 2px;
+@keyframes nmSpin {
+  to { transform: rotate(360deg); }
 }
 
-.dashboard-root.db-theme-white .db-btn {
-  padding: 7px 14px;
-  font-size: 0.78rem;
-  border-radius: 10px;
+.db-loading-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
-.dashboard-root.db-theme-white .db-btn-secondary {
-  background: #ffffff;
-  color: #334155;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+.db-loading-text strong {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: var(--nm-text-dark);
 }
 
-.dashboard-root.db-theme-white .db-btn-secondary:hover {
-  background: #f8fafc;
-  color: #0f172a;
-  border-color: #cbd5e1;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.06);
-}
-
-.dashboard-root.db-theme-white .db-btn-primary {
-  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
-  box-shadow: 0 3px 10px rgba(124, 58, 237, 0.3);
-}
-
-.dashboard-root.db-theme-white .db-profile-chip {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-  padding: 3px 10px 3px 4px;
-  border-radius: 999px;
-}
-
-.dashboard-root.db-theme-white .db-avatar {
-  width: 28px;
-  height: 28px;
-  font-size: 0.74rem;
-  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
-  color: #ffffff;
-  box-shadow: 0 2px 5px rgba(124, 58, 237, 0.25);
-}
-
-.dashboard-root.db-theme-white .db-profile-name {
-  color: #0f172a;
-  font-size: 0.76rem;
-}
-
-.dashboard-root.db-theme-white .db-profile-role {
-  color: #64748b;
-  font-size: 0.68rem;
+.db-loading-text span {
+  font-size: 0.82rem;
+  color: var(--nm-text-muted);
+  font-weight: 600;
 }
 
 /* ══════════════════════════════════════════════════════════
