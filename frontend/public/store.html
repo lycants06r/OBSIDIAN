@@ -1405,14 +1405,42 @@
 
             /* PRODUCT CARDS */
             container.innerHTML = activeProducts.map(product => {
-                const price = Number(product.price) || 0;
-                const discountPrice = Number(product.discountPrice) || 0;
-                const finalPrice = discountPrice > 0 ? discountPrice : price;
+                const mrp = Number(product.mrp) || Number(product.price) || 0;
+                const sellingPrice = Number(product.sellingPrice) || Number(product.price) || 0;
+                const finalPrice = sellingPrice > 0 ? sellingPrice : mrp;
                 const stock = Number(product.stock ?? product.quantity ?? 0);
 
-                let discount = 0;
-                if (discountPrice > 0 && price > discountPrice) {
-                    discount = Math.round(((price - discountPrice) / price) * 100);
+                let discount = Number(product.discountPercent) || 0;
+                if (discount === 0 && mrp > sellingPrice && sellingPrice > 0) {
+                    discount = Math.round(((mrp - sellingPrice) / mrp) * 100);
+                }
+                if (discount === 0) {
+                    const discountPrice = Number(product.discountPrice) || 0;
+                    if (discountPrice > 0 && mrp > discountPrice) {
+                        discount = Math.round(((mrp - discountPrice) / mrp) * 100);
+                    }
+                }
+
+                const hasMrpDiff = mrp > sellingPrice && sellingPrice > 0;
+
+                const brandHtml = product.brand ? `<div style="font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;color:#64748b;margin-bottom:2px;">${product.brand}</div>` : "";
+
+                const types = Array.isArray(product.types) ? product.types : [];
+                let typesHtml = "";
+                if (types.length > 0) {
+                    typesHtml = `<div class="variant-chips" data-product-id="${product.id}" style="display:flex;flex-wrap:wrap;gap:5px;margin:6px 0;">
+                        ${types.map((t, i) => `<button type="button" class="variant-chip${i === 0 ? ' selected' : ''}" data-variant="${t}" onclick="selectVariant('${product.id}','${t}', this)" style="
+                            padding:3px 10px;
+                            border-radius:999px;
+                            font-size:11px;
+                            font-weight:700;
+                            border:1.5px solid ${i === 0 ? '#0ea5e9' : 'rgba(100,116,139,0.35)'};
+                            background:${i === 0 ? 'rgba(14,165,233,0.15)' : 'rgba(255,255,255,0.4)'};
+                            color:${i === 0 ? '#0ea5e9' : '#475569'};
+                            cursor:pointer;
+                            transition:all 0.15s ease;
+                        ">${t}</button>`).join("")}
+                    </div>`;
                 }
 
                 // Render image or fallback emoji
@@ -1444,6 +1472,7 @@
                         </div>
 
                         <div class="product-info">
+                            ${brandHtml}
                             <div class="category">
                                 ${product.category || "General"}
                             </div>
@@ -1451,6 +1480,8 @@
                             <h3>
                                 ${product.name}
                             </h3>
+
+                            ${typesHtml}
 
                             <p class="description">
                                 ${product.description || "Crafted with obsidian design standards."}
@@ -1460,9 +1491,9 @@
                                 <span class="current-price">
                                     ${currency}${finalPrice.toLocaleString()}
                                 </span>
-                                ${discountPrice > 0 ? `
+                                ${hasMrpDiff ? `
                                     <span class="old-price">
-                                        ${currency}${price.toLocaleString()}
+                                        ${currency}${mrp.toLocaleString()}
                                     </span>
                                 ` : ""}
                             </div>
@@ -1484,6 +1515,26 @@
             }).join("");
         }
 
+        /* Track selected variants per product */
+        const selectedVariants = {};
+
+        function selectVariant(productId, variant, btn) {
+            selectedVariants[productId] = variant;
+            const parent = btn.parentElement;
+            if (parent) {
+                parent.querySelectorAll('.variant-chip').forEach(chip => {
+                    chip.style.border = '1.5px solid rgba(100,116,139,0.35)';
+                    chip.style.background = 'rgba(255,255,255,0.4)';
+                    chip.style.color = '#475569';
+                    chip.classList.remove('selected');
+                });
+                btn.style.border = '1.5px solid #0ea5e9';
+                btn.style.background = 'rgba(14,165,233,0.15)';
+                btn.style.color = '#0ea5e9';
+                btn.classList.add('selected');
+            }
+        }
+
 
         /* =========================================
            ADD TO CART
@@ -1499,7 +1550,16 @@
                 return;
             }
 
-            const existing = cart.find(item => String(item.id) === String(productId));
+            const types = Array.isArray(product.types) ? product.types : [];
+            let chosenVariant = "";
+            if (types.length > 0) {
+                chosenVariant = selectedVariants[productId] || types[0];
+            }
+
+            const cartPrice = Number(product.sellingPrice) || Number(product.price) || 0;
+
+            const cartKey = types.length > 0 ? `${productId}_${chosenVariant}` : String(productId);
+            const existing = cart.find(item => String(item.cartKey || item.id) === cartKey);
 
             if (existing) {
                 if (existing.quantity >= stock) {
@@ -1510,11 +1570,13 @@
             } else {
                 cart.push({
                     id: product.id,
+                    cartKey: cartKey,
                     name: product.name,
-                    price: Number(product.price) || 0,
+                    price: cartPrice,
                     discountPrice: Number(product.discountPrice) || 0,
                     image: product.image || "",
                     emoji: product.emoji || "📦",
+                    selectedVariant: chosenVariant,
                     quantity: 1
                 });
             }

@@ -1,0 +1,9 @@
+node_modules/
+.next/
+next-env.d.ts
+dist/
+build/
+.turbo/
+.cache/
+.env*.local
+*.log

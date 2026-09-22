@@ -2484,3 +2484,327 @@
   box-shadow: var(--nm-shadow-out-xl) !important;
   color: var(--nm-text-dark) !important;
 }
+
+/* ══════════════════════════════════════════════════════════
+   HAND-DRAWN REFERENCE ADD PRODUCT MODAL (PURE NEUMORPHISM)
+   ══════════════════════════════════════════════════════════ */
+.hand-ref-modal {
+  width: 100%;
+  max-width: 860px;
+  background: var(--nm-bg);
+  box-shadow: var(--nm-shadow-out-xl);
+  border-radius: var(--nm-radius-xl);
+  padding: 34px 38px;
+  color: var(--nm-text-dark);
+  font-family: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  position: relative;
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hand-ref-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 26px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--nm-border-inner);
+}
+
+.hand-ref-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--nm-text-dark);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hand-ref-title-badge {
+  display: inline-block;
+  width: 8px;
+  height: 24px;
+  border-radius: var(--nm-radius-pill);
+  background: var(--nm-accent-gradient);
+}
+
+.hand-ref-close-btn {
+  background: var(--nm-bg);
+  border: none;
+  border-radius: 50%;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--nm-shadow-out);
+  font-size: 0.95rem;
+  color: var(--nm-text-muted);
+  transition: var(--nm-transition);
+  font-family: inherit;
+}
+
+.hand-ref-close-btn:hover {
+  box-shadow: var(--nm-shadow-in);
+  color: var(--nm-accent-red);
+}
+
+.hand-ref-grid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 28px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 768px) {
+  .hand-ref-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Neumorphic Image Upload Panel */
+.hand-ref-img-box {
+  width: 100%;
+  height: 235px;
+  border-radius: var(--nm-radius-lg);
+  background: var(--nm-bg);
+  box-shadow: var(--nm-shadow-in);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  transition: var(--nm-transition);
+  cursor: pointer;
+  border: 2px dashed rgba(160, 174, 192, 0.45);
+}
+
+.hand-ref-img-box:hover {
+  box-shadow: var(--nm-shadow-in-deep);
+  border-color: var(--nm-accent);
+}
+
+.hand-ref-img-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: calc(var(--nm-radius-lg) - 2px);
+}
+
+.hand-ref-img-placeholder {
+  text-align: center;
+  padding: 18px;
+  color: var(--nm-text-muted);
+}
+
+.hand-ref-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hand-ref-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hand-ref-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--nm-text-medium);
+}
+
+.hand-ref-input-with-btn {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Neumorphic Form Controls */
+.hand-ref-input,
+.hand-ref-textarea {
+  width: 100%;
+  background: var(--nm-bg);
+  border: none;
+  border-radius: var(--nm-radius-md);
+  padding: 12px 16px;
+  font-size: 0.88rem;
+  font-family: inherit;
+  font-weight: 600;
+  color: var(--nm-text-dark);
+  box-shadow: var(--nm-shadow-in);
+  transition: var(--nm-transition-fast);
+  outline: none;
+}
+
+.hand-ref-input:focus,
+.hand-ref-textarea:focus {
+  box-shadow: var(--nm-shadow-in-deep), 0 0 0 3px rgba(99, 102, 241, 0.18);
+}
+
+.hand-ref-input::placeholder,
+.hand-ref-textarea::placeholder {
+  color: var(--nm-text-light);
+  font-weight: 400;
+}
+
+/* Neumorphic + Button */
+.hand-ref-plus-btn {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: var(--nm-radius-md);
+  background: var(--nm-bg);
+  color: var(--nm-accent);
+  font-size: 1.25rem;
+  font-weight: 800;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--nm-shadow-out);
+  transition: var(--nm-transition-fast);
+}
+
+.hand-ref-plus-btn:hover {
+  box-shadow: var(--nm-shadow-hover);
+  color: var(--nm-accent-2);
+  transform: translateY(-1px);
+}
+
+.hand-ref-plus-btn:active {
+  box-shadow: var(--nm-shadow-in);
+  transform: translateY(0);
+}
+
+/* Neumorphic Variant Chips */
+.hand-ref-chips-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.hand-ref-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--nm-bg);
+  box-shadow: var(--nm-shadow-out);
+  color: var(--nm-text-dark);
+  padding: 6px 14px;
+  border-radius: var(--nm-radius-pill);
+  font-size: 0.8rem;
+  font-weight: 700;
+  transition: var(--nm-transition-fast);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+}
+
+.hand-ref-chip:hover {
+  box-shadow: var(--nm-shadow-hover);
+}
+
+.hand-ref-chip-remove {
+  background: transparent;
+  border: none;
+  color: var(--nm-accent-red);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 800;
+  padding: 0;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+
+.hand-ref-chip-remove:hover {
+  transform: scale(1.2);
+}
+
+.hand-ref-textarea {
+  resize: vertical;
+  min-height: 90px;
+  line-height: 1.6;
+}
+
+/* Neumorphic Price Section */
+.hand-ref-price-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 18px;
+  margin-bottom: 22px;
+}
+
+@media (max-width: 620px) {
+  .hand-ref-price-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hand-ref-discount-badge {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(16, 185, 129, 0.14);
+  color: #059669;
+  box-shadow: inset 1px 1px 3px rgba(184, 190, 201, 0.5), inset -1px -1px 3px #ffffff;
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: var(--nm-radius-pill);
+  margin-top: 6px;
+  width: fit-content;
+  letter-spacing: 0.04em;
+}
+
+/* Neumorphic Actions */
+.hand-ref-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 14px;
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--nm-border-inner);
+}
+
+.hand-ref-save-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 34px;
+  border-radius: var(--nm-radius-md);
+  font-size: 0.9rem;
+  font-weight: 800;
+  font-family: inherit;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: none;
+  background: var(--nm-accent-gradient);
+  color: #ffffff;
+  box-shadow: 5px 5px 12px rgba(99, 102, 241, 0.35), -3px -3px 8px rgba(255, 255, 255, 0.7);
+  transition: var(--nm-transition);
+}
+
+.hand-ref-save-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 7px 7px 16px rgba(99, 102, 241, 0.45), -4px -4px 10px rgba(255, 255, 255, 0.8);
+}
+
+.hand-ref-save-btn:active {
+  transform: translateY(0);
+  box-shadow: inset 3px 3px 8px rgba(0, 0, 0, 0.2);
+}

@@ -12,10 +12,15 @@ interface Product {
   id: number;
   name: string;
   price: number;
+  sellingPrice?: number;
+  mrp?: number;
+  discountPercent?: number;
   stock: number;
-  emoji: string;
-  category: string;
-  description: string;
+  brand?: string;
+  types?: string[];
+  emoji?: string;
+  category?: string;
+  description?: string;
   status?: string;
   discountPrice?: number;
   image?: string;
@@ -77,6 +82,16 @@ export default function DashboardPage() {
 
   // Form States for Product Modal
   const [formName, setFormName] = useState("");
+  const [formBrand, setFormBrand] = useState("");
+  const [availableBrands, setAvailableBrands] = useState<string[]>(["Nike", "Adidas", "Puma", "Zara", "Apple", "Samsung", "Obsidian"]);
+  const [showAddBrandInput, setShowAddBrandInput] = useState(false);
+  const [newBrandInput, setNewBrandInput] = useState("");
+
+  const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+  const [newTypeInput, setNewTypeInput] = useState("");
+
+  const [formMrp, setFormMrp] = useState("");
+  const [formSellingPrice, setFormSellingPrice] = useState("");
   const [formPrice, setFormPrice] = useState("");
   const [formStock, setFormStock] = useState("10");
   const [formEmoji, setFormEmoji] = useState("📦");
@@ -614,82 +629,134 @@ export default function DashboardPage() {
     router.push("/");
   };
 
-  // Add or Edit Product Submit
-  const handleProductSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formName.trim() || !formPrice) {
-      triggerToast("Please enter a valid product name and price");
-      return;
+  const handleAddBrand = () => {
+    if (!newBrandInput.trim()) return;
+    const bName = newBrandInput.trim();
+    if (!availableBrands.includes(bName)) {
+      setAvailableBrands((prev) => [...prev, bName]);
     }
+    setFormBrand(bName);
+    setNewBrandInput("");
+    setShowAddBrandInput(false);
+  };
 
-    const priceNum = parseFloat(formPrice);
-    const stockNum = parseInt(formStock) || 0;
-
-    if (editingProduct) {
-      const updated = products.map((p) =>
-        p.id === editingProduct.id
-          ? {
-            ...p,
-            name: formName.trim(),
-            price: priceNum,
-            stock: stockNum,
-            emoji: formEmoji || "📦",
-            category: formCategory || "General",
-            description: formDesc.trim(),
-            image: formImage.trim() || undefined,
-            status: "active",
-          }
-          : p
-      );
-      updateProductList(updated);
-      triggerToast(`Updated "${formName.trim()}"`);
-    } else {
-      const newProd: Product = {
-        id: Date.now(),
-        name: formName.trim(),
-        price: priceNum,
-        stock: stockNum,
-        emoji: formEmoji || "📦",
-        category: formCategory || "General",
-        description: formDesc.trim(),
-        image: formImage.trim() || undefined,
-        status: "active",
-      };
-      updateProductList([newProd, ...products]);
-      triggerToast(`Added "${formName.trim()}" to catalog!`);
+  const handleAddTypeChip = () => {
+    if (!newTypeInput.trim()) return;
+    const tag = newTypeInput.trim();
+    if (!selectedTypes.includes(tag)) {
+      setSelectedTypes((prev) => [...prev, tag]);
     }
+    setNewTypeInput("");
+  };
 
-    setShowProductModal(false);
-    setEditingProduct(null);
+  const handleRemoveTypeChip = (tag: string) => {
+    setSelectedTypes((prev) => prev.filter((t) => t !== tag));
+  };
+
+  const resetProductForm = () => {
     setFormName("");
+    setFormBrand("");
+    setShowAddBrandInput(false);
+    setNewBrandInput("");
+    setSelectedTypes([]);
+    setNewTypeInput("");
+    setFormDesc("");
+    setFormMrp("");
+    setFormSellingPrice("");
     setFormPrice("");
     setFormStock("10");
     setFormEmoji("📦");
     setFormCategory("General");
-    setFormDesc("");
     setFormImage("");
+  };
+
+  // Add or Edit Product Submit
+  const handleProductSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formName.trim()) {
+      triggerToast("Product Name is required");
+      return;
+    }
+
+    const mrpNum = parseFloat(formMrp);
+    const sellingNum = parseFloat(formSellingPrice);
+    const stockNum = parseInt(formStock);
+
+    if (isNaN(mrpNum) || mrpNum <= 0) {
+      triggerToast("Please enter a valid MRP");
+      return;
+    }
+
+    if (isNaN(sellingNum) || sellingNum <= 0) {
+      triggerToast("Please enter a valid Selling Price");
+      return;
+    }
+
+    if (sellingNum > mrpNum) {
+      triggerToast("Selling Price cannot be greater than MRP");
+      return;
+    }
+
+    if (isNaN(stockNum) || stockNum < 0) {
+      triggerToast("Please enter a valid Stock Quantity");
+      return;
+    }
+
+    const calculatedDiscount = Math.round(((mrpNum - sellingNum) / mrpNum) * 100);
+
+    const productData: Product = {
+      id: editingProduct ? editingProduct.id : Date.now(),
+      name: formName.trim(),
+      image: formImage.trim() || undefined,
+      brand: formBrand.trim() || undefined,
+      types: selectedTypes.length > 0 ? selectedTypes : undefined,
+      description: formDesc.trim(),
+      mrp: mrpNum,
+      sellingPrice: sellingNum,
+      discountPercent: calculatedDiscount,
+      stock: stockNum,
+
+      // Compatibility fields
+      price: sellingNum,
+      emoji: editingProduct?.emoji || "📦",
+      category: formBrand.trim() || formCategory || "General",
+      status: "active",
+    };
+
+    if (editingProduct) {
+      const updated = products.map((p) => (p.id === editingProduct.id ? productData : p));
+      updateProductList(updated);
+      triggerToast(`Updated "${productData.name}"!`);
+    } else {
+      updateProductList([productData, ...products]);
+      triggerToast(`Added "${productData.name}" to catalog!`);
+    }
+
+    setShowProductModal(false);
+    setEditingProduct(null);
+    resetProductForm();
   };
 
   const openAddProductModal = () => {
     setEditingProduct(null);
-    setFormName("");
-    setFormPrice("");
-    setFormStock("10");
-    setFormEmoji("✨");
-    setFormCategory("Apparel");
-    setFormDesc("");
-    setFormImage("");
+    resetProductForm();
     setShowProductModal(true);
   };
 
   const openEditProductModal = (product: Product) => {
     setEditingProduct(product);
-    setFormName(product.name);
-    setFormPrice(product.price.toString());
-    setFormStock(product.stock.toString());
-    setFormEmoji(product.emoji);
-    setFormCategory(product.category);
+    setFormName(product.name || "");
+    setFormBrand(product.brand || product.category || "");
+    setSelectedTypes(product.types || []);
     setFormDesc(product.description || "");
+    const initialMrp = (product.mrp || product.price || "").toString();
+    const initialSelling = (product.sellingPrice || product.price || "").toString();
+    setFormMrp(initialMrp);
+    setFormSellingPrice(initialSelling);
+    setFormPrice(initialSelling);
+    setFormStock((product.stock ?? 10).toString());
+    setFormEmoji(product.emoji || "📦");
+    setFormCategory(product.category || "General");
     setFormImage(product.image || "");
     setShowProductModal(true);
   };
@@ -2336,178 +2403,260 @@ export default function DashboardPage() {
         )}
       </main>
 
-      {/* ── MODAL: ADD / EDIT PRODUCT ── */}
+      {/* ── MODAL: ADD / EDIT PRODUCT (Hand-Drawn Reference Layout - Pure Neumorphism) ── */}
       {showProductModal && (
         <div className="db-modal-backdrop" onClick={() => setShowProductModal(false)}>
-          <div className="db-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="db-modal-header">
-              <h3 className="db-modal-title">
-                {editingProduct ? "Edit Product" : "Add New Product"}
+          <div className="hand-ref-modal" onClick={(e) => e.stopPropagation()} style={{ maxHeight: "92vh", overflowY: "auto" }}>
+
+            {/* Header */}
+            <div className="hand-ref-header">
+              <h3 className="hand-ref-title">
+                <span className="hand-ref-title-badge"></span>
+                {editingProduct ? "Edit Product" : "Add Product"}
               </h3>
               <button
-                className="db-modal-close"
+                type="button"
+                className="hand-ref-close-btn"
                 onClick={() => setShowProductModal(false)}
-                data-cursor="link"
+                title="Close"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleProductSubmit} className="db-form">
-              <div className="db-form-group">
-                <label>Product Title *</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Obsidian Oversized Parka"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  className="db-form-input"
-                  required
+            <form onSubmit={handleProductSubmit}>
+
+              {/* ── TOP GRID: Image (left) + Name/Brand/Type (right) ── */}
+              <div className="hand-ref-grid">
+
+                {/* LEFT: Product Image Upload */}
+                <div>
+                  <label className="hand-ref-img-box" htmlFor="hand-ref-file-input">
+                    {formImage ? (
+                      <img src={formImage} alt="Preview" className="hand-ref-img-preview" />
+                    ) : (
+                      <div className="hand-ref-img-placeholder">
+                        <div style={{ fontSize: "2.6rem", marginBottom: 8 }}>📷</div>
+                        <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--nm-text-dark)" }}>Click to upload image</div>
+                        <div style={{ fontSize: "0.72rem", marginTop: 4, color: "var(--nm-text-muted)" }}>or paste URL below</div>
+                      </div>
+                    )}
+                    <input
+                      id="hand-ref-file-input"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
+                      style={{ display: "none" }}
+                      disabled={isUploadingImage}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleUploadProductImage(file);
+                      }}
+                    />
+                  </label>
+                  {/* URL Paste + Remove */}
+                  <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      type="url"
+                      placeholder="Paste image URL (https://...)"
+                      value={formImage}
+                      onChange={(e) => setFormImage(e.target.value)}
+                      className="hand-ref-input"
+                      style={{ fontSize: "0.78rem", padding: "10px 12px" }}
+                    />
+                    {formImage && (
+                      <button
+                        type="button"
+                        onClick={() => setFormImage("")}
+                        style={{
+                          background: "var(--nm-bg)",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "32px",
+                          height: "32px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "var(--nm-accent-red)",
+                          cursor: "pointer",
+                          boxShadow: "var(--nm-shadow-out)",
+                          fontWeight: 700,
+                          flexShrink: 0
+                        }}
+                        title="Remove image"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  {isUploadingImage && (
+                    <div style={{ marginTop: 6, fontSize: "0.74rem", color: "var(--nm-accent)", fontWeight: 700 }}>⏳ Uploading to storage...</div>
+                  )}
+                </div>
+
+                {/* RIGHT: Product Name, Brand, Type */}
+                <div className="hand-ref-right-col">
+
+                  {/* Product Name */}
+                  <div className="hand-ref-input-group">
+                    <label className="hand-ref-label">Product Name *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Classic T-Shirt"
+                      value={formName}
+                      onChange={(e) => setFormName(e.target.value)}
+                      className="hand-ref-input"
+                      required
+                    />
+                  </div>
+
+                  {/* Brand */}
+                  <div className="hand-ref-input-group">
+                    <label className="hand-ref-label">Brand</label>
+                    {showAddBrandInput ? (
+                      <div className="hand-ref-input-with-btn">
+                        <input
+                          type="text"
+                          placeholder="Enter new brand name..."
+                          value={newBrandInput}
+                          onChange={(e) => setNewBrandInput(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddBrand(); } }}
+                          className="hand-ref-input"
+                          autoFocus
+                        />
+                        <button type="button" className="hand-ref-plus-btn" onClick={handleAddBrand} title="Add brand">✓</button>
+                        <button type="button" onClick={() => setShowAddBrandInput(false)} style={{ background: "none", border: "none", color: "var(--nm-accent-red)", cursor: "pointer", fontSize: "1.1rem", padding: "0 6px" }}>✕</button>
+                      </div>
+                    ) : (
+                      <div className="hand-ref-input-with-btn">
+                        <select
+                          value={formBrand}
+                          onChange={(e) => setFormBrand(e.target.value)}
+                          className="hand-ref-input"
+                          style={{ appearance: "auto" }}
+                        >
+                          <option value="">— Select Brand —</option>
+                          {availableBrands.map((b) => (
+                            <option key={b} value={b}>{b}</option>
+                          ))}
+                        </select>
+                        <button type="button" className="hand-ref-plus-btn" onClick={() => setShowAddBrandInput(true)} title="Add new brand">+</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Type / Variants */}
+                  <div className="hand-ref-input-group">
+                    <label className="hand-ref-label">Type / Variants</label>
+                    <div className="hand-ref-input-with-btn">
+                      <input
+                        type="text"
+                        placeholder="e.g. S, M, L, XL..."
+                        value={newTypeInput}
+                        onChange={(e) => setNewTypeInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleAddTypeChip(); } }}
+                        className="hand-ref-input"
+                      />
+                      <button type="button" className="hand-ref-plus-btn" onClick={handleAddTypeChip} title="Add variant">+</button>
+                    </div>
+                    {selectedTypes.length > 0 && (
+                      <div className="hand-ref-chips-wrap">
+                        {selectedTypes.map((tag) => (
+                          <span key={tag} className="hand-ref-chip">
+                            {tag}
+                            <button type="button" className="hand-ref-chip-remove" onClick={() => handleRemoveTypeChip(tag)} title="Remove variant">✕</button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                </div>
+              </div>
+
+              {/* ── PRODUCT DESCRIPTION ── */}
+              <div className="hand-ref-input-group" style={{ marginBottom: 4 }}>
+                <label className="hand-ref-label">Product Description</label>
+                <textarea
+                  placeholder="Describe materials, sizing, features, and details..."
+                  value={formDesc}
+                  onChange={(e) => setFormDesc(e.target.value)}
+                  className="hand-ref-textarea"
                 />
               </div>
 
-              <div className="db-form-row">
-                <div className="db-form-group">
-                  <label>Price ({currency}) *</label>
+              {/* ── PRICE SECTION: 3-column row ── */}
+              <div className="hand-ref-price-grid">
+                {/* MRP */}
+                <div className="hand-ref-input-group">
+                  <label className="hand-ref-label">MRP ({currency}) *</label>
                   <input
                     type="number"
                     min="0"
                     step="0.01"
-                    placeholder="e.g. 1999"
-                    value={formPrice}
-                    onChange={(e) => setFormPrice(e.target.value)}
-                    className="db-form-input"
+                    placeholder="e.g. 999"
+                    value={formMrp}
+                    onChange={(e) => setFormMrp(e.target.value)}
+                    className="hand-ref-input"
                     required
                   />
                 </div>
 
-                <div className="db-form-group">
-                  <label>Stock Quantity *</label>
+                {/* Selling Price */}
+                <div className="hand-ref-input-group">
+                  <label className="hand-ref-label">Selling Price ({currency}) *</label>
                   <input
                     type="number"
                     min="0"
-                    placeholder="e.g. 20"
+                    step="0.01"
+                    placeholder="e.g. 799"
+                    value={formSellingPrice}
+                    onChange={(e) => setFormSellingPrice(e.target.value)}
+                    className="hand-ref-input"
+                    required
+                  />
+                  {/* Auto Discount Badge */}
+                  {formMrp && formSellingPrice && parseFloat(formSellingPrice) > 0 && parseFloat(formMrp) > parseFloat(formSellingPrice) && (
+                    <span className="hand-ref-discount-badge">
+                      {Math.round(((parseFloat(formMrp) - parseFloat(formSellingPrice)) / parseFloat(formMrp)) * 100)}% OFF
+                    </span>
+                  )}
+                  {formMrp && formSellingPrice && parseFloat(formSellingPrice) > parseFloat(formMrp) && (
+                    <span style={{ fontSize: "0.72rem", color: "var(--nm-accent-red)", fontWeight: 700, marginTop: 4 }}>
+                      ⚠ Selling Price cannot exceed MRP
+                    </span>
+                  )}
+                </div>
+
+                {/* Stock Quantity */}
+                <div className="hand-ref-input-group">
+                  <label className="hand-ref-label">Stock Quantity *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 25"
                     value={formStock}
                     onChange={(e) => setFormStock(e.target.value)}
-                    className="db-form-input"
+                    className="hand-ref-input"
                     required
                   />
                 </div>
               </div>
 
-              <div className="db-form-row">
-                <div className="db-form-group">
-                  <label>Emoji / Icon</label>
-                  <input
-                    type="text"
-                    maxLength={3}
-                    placeholder="e.g. 🧥"
-                    value={formEmoji}
-                    onChange={(e) => setFormEmoji(e.target.value)}
-                    className="db-form-input"
-                  />
-                </div>
-
-                <div className="db-form-group">
-                  <label>Category</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Apparel, Luxury"
-                    value={formCategory}
-                    onChange={(e) => setFormCategory(e.target.value)}
-                    className="db-form-input"
-                  />
-                </div>
-              </div>
-
-              <div className="db-form-group">
-                <label>Product Description</label>
-                <textarea
-                  placeholder="Describe materials, sizing, and details..."
-                  value={formDesc}
-                  onChange={(e) => setFormDesc(e.target.value)}
-                  className="db-form-textarea"
-                />
-              </div>
-
-              {/* Product Image (Supabase Storage Upload) */}
-              <div className="db-form-group">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                  <label style={{ margin: 0 }}>Product Image (Supabase Storage)</label>
-                  {formImage && (
-                    <button
-                      type="button"
-                      onClick={() => setFormImage("")}
-                      style={{ background: "none", border: "none", color: "#ef4444", fontSize: "0.72rem", cursor: "pointer", fontWeight: 600 }}
-                    >
-                      ✕ Remove
-                    </button>
-                  )}
-                </div>
-
-                <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-                  {formImage ? (
-                    <div style={{ width: "52px", height: "52px", borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.15)", flexShrink: 0 }}>
-                      <img src={formImage} alt="Preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    </div>
-                  ) : (
-                    <div style={{ width: "52px", height: "52px", borderRadius: "8px", border: "1px dashed rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.2rem", flexShrink: 0 }}>
-                      📷
-                    </div>
-                  )}
-
-                  <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "6px" }}>
-                    <label
-                      className="db-btn db-btn-secondary"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        cursor: isUploadingImage ? "wait" : "pointer",
-                        fontSize: "0.76rem",
-                        padding: "6px 12px",
-                        width: "fit-content",
-                      }}
-                    >
-                      <span>{isUploadingImage ? "⏳" : "☁️"}</span>
-                      <span>{isUploadingImage ? "Uploading..." : "Upload from Device"}</span>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif,image/svg+xml"
-                        style={{ display: "none" }}
-                        disabled={isUploadingImage}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleUploadProductImage(file);
-                        }}
-                      />
-                    </label>
-                    <input
-                      type="url"
-                      placeholder="Or paste image URL (https://...)"
-                      value={formImage}
-                      onChange={(e) => setFormImage(e.target.value)}
-                      className="db-form-input"
-                      style={{ fontSize: "0.78rem", padding: "6px 10px" }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="db-modal-footer">
+              {/* ── SAVE BUTTON ── */}
+              <div className="hand-ref-actions">
                 <button
                   type="button"
                   className="db-btn db-btn-secondary"
                   onClick={() => setShowProductModal(false)}
-                  data-cursor="link"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="db-btn db-btn-primary" data-cursor="link">
-                  {editingProduct ? "Save Changes" : "Create Product"}
+                <button type="submit" className="hand-ref-save-btn" data-cursor="link">
+                  {editingProduct ? "Save Changes" : "Save Product"}
                 </button>
               </div>
             </form>
+
           </div>
         </div>
       )}
