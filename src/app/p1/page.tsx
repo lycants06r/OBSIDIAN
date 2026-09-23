@@ -2,11 +2,13 @@
 
 import SmoothScroll from "@/components/SmoothScroll";
 import HeroSection from "@/components/HeroSection";
-import StorySection from "@/components/StorySection";
-import TypographySection from "@/components/TypographySection";
-import DetailSection from "@/components/DetailSection";
-import FinalSection from "@/components/FinalSection";
-import SiteFooter from "@/components/SiteFooter";
+import dynamic from "next/dynamic";
+
+const StorySection = dynamic(() => import("@/components/StorySection"), { ssr: false });
+const TypographySection = dynamic(() => import("@/components/TypographySection"), { ssr: false });
+const DetailSection = dynamic(() => import("@/components/DetailSection"), { ssr: false });
+const FinalSection = dynamic(() => import("@/components/FinalSection"), { ssr: false });
+const SiteFooter = dynamic(() => import("@/components/SiteFooter"), { ssr: false });
 
 export default function Home() {
   return (

@@ -301,9 +301,17 @@ export default function DashboardPage() {
     }
   };
 
+  // Track initial load to prevent duplicate analytics fetch
+  const hasInitializedAnalytics = useRef(false);
+
   // Trigger backend analytics request whenever backendStoreId or chartTimeframe updates
   useEffect(() => {
     if (backendStoreId && backendStoreId !== "default") {
+      if (!hasInitializedAnalytics.current) {
+        hasInitializedAnalytics.current = true;
+        // Skip first fetch if backendAnalytics is already populated from initDashboard
+        if (backendAnalytics.lastUpdated) return;
+      }
       fetchAnalytics(backendStoreId, chartTimeframe);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -382,19 +390,22 @@ export default function DashboardPage() {
       try {
         let storeData: any = null;
 
-        // ── Fetch available templates from GET /api/templates ──
-        try {
-          const tplRes = await api.getTemplates();
+        // ── Parallelize initial API calls ──
+        const [tplResOpt, userStoresResOpt, stateOpt] = await Promise.allSettled([
+          api.getTemplates().catch(() => null),
+          api.getUserStores().catch(() => null),
+          api.getAccountState()
+        ]);
+
+        if (tplResOpt.status === "fulfilled" && tplResOpt.value) {
+          const tplRes = tplResOpt.value;
           if (Array.isArray(tplRes?.templates) && tplRes.templates.length > 0) {
             setAvailableTemplates(tplRes.templates);
           }
-        } catch {
-          // Keep DEFAULT_STORE_TEMPLATES
         }
 
-        // ── Step 2a: Fetch user's stores from GET /api/stores/me ──
-        try {
-          const userStoresRes = await api.getUserStores();
+        if (userStoresResOpt.status === "fulfilled" && userStoresResOpt.value) {
+          const userStoresRes = userStoresResOpt.value;
           const storesList = userStoresRes?.stores || [];
           if (storesList.length > 0) {
             const matched = storedStoreId
@@ -402,9 +413,15 @@ export default function DashboardPage() {
               : null;
             storeData = matched || userStoresRes.defaultStore || storesList[0];
           }
-        } catch {
-          // If /api/stores/me fails, fallback gracefully to account state
         }
+
+        const state = stateOpt.status === "fulfilled" ? stateOpt.value : null;
+
+        if (!state) {
+          throw new Error("Failed to fetch authoritative account state");
+        }
+
+        setIsBackendConnected(true);
 
         // ── Step 2b: If store ID is known, fetch detailed store from GET /api/stores/:storeId ──
         const activeStoreId = storeData?.id || storedStoreId;
@@ -418,10 +435,6 @@ export default function DashboardPage() {
             // Keep existing storeData
           }
         }
-
-        // ── Step 2c: Fetch account state (for user profile, products, orders, and fallback store) ──
-        const state = await api.getAccountState();
-        setIsBackendConnected(true);
 
         if (state.analytics) {
           const initA = state.analytics;
