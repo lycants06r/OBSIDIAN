@@ -310,7 +310,7 @@ export default function DashboardPage() {
       if (!hasInitializedAnalytics.current) {
         hasInitializedAnalytics.current = true;
         // Skip first fetch if backendAnalytics is already populated from initDashboard
-        if (backendAnalytics.lastUpdated) return;
+        if (backendAnalytics?.lastUpdated) return;
       }
       fetchAnalytics(backendStoreId, chartTimeframe);
     }
