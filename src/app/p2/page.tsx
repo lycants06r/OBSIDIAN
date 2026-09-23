@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
@@ -236,6 +236,15 @@ export default function DashboardPage() {
   const [isDeploying, setIsDeploying] = useState<boolean>(false);
   const [deploymentUrl, setDeploymentUrl] = useState<string>("");
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
+
+  // Automated deployment status polling ref & helper
+  const deploymentPollRef = useRef<NodeJS.Timeout | null>(null);
+  const stopDeploymentPolling = () => {
+    if (deploymentPollRef.current) {
+      clearInterval(deploymentPollRef.current);
+      deploymentPollRef.current = null;
+    }
+  };
 
   // Auth guard and user state
   const [authLoading, setAuthLoading] = useState(true);
@@ -671,20 +680,38 @@ export default function DashboardPage() {
             // 7. STORE_DEPLOYMENT_UPDATED
             else if (type === "STORE_DEPLOYMENT_UPDATED") {
               const dep = payload;
+              const depStatus = String(dep?.status || "").toUpperCase();
               const depUrl =
                 dep?.deploymentUrl ||
                 dep?.deployment_url ||
+                dep?.liveUrl ||
                 dep?.live_url ||
                 dep?.url ||
                 dep?.store?.live_url ||
                 dep?.store?.deploymentUrl;
+
               if (depUrl) {
                 setDeploymentUrl(depUrl);
                 localStorage.setItem("obsidian_deployment_url", depUrl);
               }
-              if (dep?.isDeploying !== undefined) {
+
+              if (depStatus === "READY" || depStatus === "COMPLETED") {
+                stopDeploymentPolling();
+                setIsDeploying(false);
+                if (depUrl) {
+                  triggerToast(`Live on Vercel: ${depUrl} 🎉`);
+                }
+              } else if (depStatus === "ERROR" || depStatus === "FAILED") {
+                stopDeploymentPolling();
+                setIsDeploying(false);
+                triggerToast("Deployment encountered an error on Vercel.");
+              } else if (depStatus === "BUILDING" || depStatus === "PENDING") {
+                setIsDeploying(true);
+              } else if (dep?.isDeploying !== undefined) {
                 setIsDeploying(Boolean(dep.isDeploying));
+                if (!dep.isDeploying) stopDeploymentPolling();
               } else if (depUrl) {
+                stopDeploymentPolling();
                 setIsDeploying(false);
               }
             }
@@ -831,6 +858,7 @@ export default function DashboardPage() {
     initDashboard();
 
     return () => {
+      stopDeploymentPolling();
       if (unsubscribeSse) unsubscribeSse();
     };
   }, []);
@@ -886,9 +914,10 @@ export default function DashboardPage() {
     api.updateAccountState({ orders: newOrders }).catch(() => {});
   };
 
-  // Vercel Deployment Trigger
+  // Vercel Deployment Trigger with Automated Polling & Terminal Status Handling
   const handleDeployToVercel = async () => {
     setIsDeploying(true);
+    stopDeploymentPolling();
     triggerToast("Compiling storefront & deploying to Vercel... 🚀");
     try {
       const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id") || "default";
@@ -896,33 +925,73 @@ export default function DashboardPage() {
         throw new Error("Valid backend store ID required for deployment");
       }
       const res = await api.deployStore(targetStoreId);
-      const liveUrl = res?.url || res?.liveUrl || res?.deploymentUrl || res?.deployment?.url;
-      if (liveUrl) {
-        setDeploymentUrl(liveUrl);
-        localStorage.setItem("obsidian_deployment_url", liveUrl);
-        triggerToast(`Live on Vercel: ${liveUrl} 🎉`);
-      } else {
-        triggerToast("Deployment successfully initiated on backend! 🚀");
+      const initialStatus = String(res?.status || "").toUpperCase();
+      const directUrl = res?.url || res?.liveUrl || res?.deploymentUrl || res?.deployment?.url;
+
+      if (directUrl && (initialStatus === "READY" || initialStatus === "COMPLETED" || !initialStatus)) {
+        setDeploymentUrl(directUrl);
+        localStorage.setItem("obsidian_deployment_url", directUrl);
+        setIsDeploying(false);
+        triggerToast(`Live on Vercel: ${directUrl} 🎉`);
+        return;
       }
 
-      // Check status via GET /api/stores/:storeId/deployment-status
-      try {
-        const statusRes = await api.getDeploymentStatus(targetStoreId);
-        if (statusRes?.deploymentUrl || statusRes?.liveUrl || statusRes?.url) {
-          const finalUrl = statusRes.deploymentUrl || statusRes.liveUrl || statusRes.url;
-          if (finalUrl) {
-            setDeploymentUrl(finalUrl);
-            localStorage.setItem("obsidian_deployment_url", finalUrl);
+      if (initialStatus === "ERROR" || initialStatus === "FAILED") {
+        setIsDeploying(false);
+        triggerToast(`Deployment failed: ${res?.message || "Build error"}`);
+        return;
+      }
+
+      // If status is BUILDING / PENDING or URL is pending, poll GET /api/stores/:storeId/deployment-status
+      triggerToast("Deployment in progress... Building storefront on Vercel ⏳");
+      let pollAttempts = 0;
+      const maxAttempts = 20; // 20 attempts * 3000ms = 60s max
+
+      deploymentPollRef.current = setInterval(async () => {
+        pollAttempts++;
+        try {
+          const statusRes = await api.getDeploymentStatus(targetStoreId);
+          const currentStatus = String(statusRes?.status || "").toUpperCase();
+          const liveUrl = statusRes?.deploymentUrl || statusRes?.liveUrl || statusRes?.url;
+
+          if (currentStatus === "READY" || currentStatus === "COMPLETED" || (liveUrl && currentStatus !== "BUILDING" && currentStatus !== "PENDING")) {
+            stopDeploymentPolling();
+            setIsDeploying(false);
+            if (liveUrl) {
+              setDeploymentUrl(liveUrl);
+              localStorage.setItem("obsidian_deployment_url", liveUrl);
+              triggerToast(`Storefront deployed successfully: ${liveUrl} 🎉`);
+            } else {
+              triggerToast("Storefront deployment is READY! 🎉");
+            }
+          } else if (currentStatus === "ERROR" || currentStatus === "FAILED") {
+            stopDeploymentPolling();
+            setIsDeploying(false);
+            triggerToast("Deployment failed on Vercel. Please check build logs.");
+          } else if (pollAttempts >= maxAttempts) {
+            stopDeploymentPolling();
+            setIsDeploying(false);
+            if (liveUrl) {
+              setDeploymentUrl(liveUrl);
+              localStorage.setItem("obsidian_deployment_url", liveUrl);
+              triggerToast(`Live: ${liveUrl}`);
+            } else {
+              triggerToast("Deployment taking longer than expected. Please check back shortly.");
+            }
+          }
+        } catch {
+          if (pollAttempts >= maxAttempts) {
+            stopDeploymentPolling();
+            setIsDeploying(false);
           }
         }
-      } catch {
-        // Status check is secondary
-      }
+      }, 3000);
+
     } catch (err: any) {
+      stopDeploymentPolling();
+      setIsDeploying(false);
       console.error("[Deploy] Deployment failed:", err);
       triggerToast(`Deployment failed: ${err.message || "Network error"}`);
-    } finally {
-      setIsDeploying(false);
     }
   };
 
