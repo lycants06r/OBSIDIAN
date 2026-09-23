@@ -227,12 +227,22 @@ export const api = {
       }
     ),
 
-  uploadAsset: (storeId: string, file: File | Blob, category: "logo" | "banner" | "product" = "product") => {
+  uploadAsset: (
+    storeId: string,
+    file: File | Blob,
+    category: "logo" | "banner" | "product" = "product",
+    productId?: string | number,
+    token?: string
+  ) => {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("category", category);
+    if (productId !== undefined && productId !== null) {
+      formData.append("productId", String(productId));
+    }
     return apiRequest<{ message: string; url: string; path: string }>(`/api/stores/${storeId}/upload`, {
       method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
     });
   },

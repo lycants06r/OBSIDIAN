@@ -683,7 +683,8 @@ export default function DashboardPage() {
     triggerToast("Uploading product image to Supabase Storage... ☁️");
     try {
       const storeId = backendStoreId || localStorage.getItem("obsidian_store_id") || "default";
-      const res = await api.uploadAsset(storeId, file, "product");
+      const productId = editingProduct?.id;
+      const res = await api.uploadAsset(storeId, file, "product", productId);
       if (res.url) {
         setFormImage(res.url);
         triggerToast("Product image uploaded to Supabase Storage! ✨");
@@ -2121,7 +2122,13 @@ export default function DashboardPage() {
                         lowStockProducts.slice(0, 2).map((item) => (
                           <div key={item.id} className="stitch-stock-item">
                             <div className="stitch-stock-left">
-                              <div className="stitch-stock-thumb">{item.emoji || "📦"}</div>
+                              <div className="stitch-stock-thumb" style={{ overflow: "hidden" }}>
+                                {item.image ? (
+                                  <img src={item.image} alt={item.name} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "6px" }} />
+                                ) : (
+                                  item.emoji || "📦"
+                                )}
+                              </div>
                               <div>
                                 <h4 className="stitch-stock-name">{item.name}</h4>
                                 <span className="stitch-stock-meta">
@@ -2378,7 +2385,13 @@ export default function DashboardPage() {
                 filteredProducts.map((product) => (
                   <div key={product.id} className="db-item-row">
                     <div className="db-item-main">
-                      <div className="db-item-emoji">{product.emoji}</div>
+                      <div className="db-item-emoji" style={{ overflow: "hidden" }}>
+                        {product.image ? (
+                          <img src={product.image} alt={product.name} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }} />
+                        ) : (
+                          product.emoji || "📦"
+                        )}
+                      </div>
                       <div className="db-item-details">
                         <h4>{product.name}</h4>
                         <div className="db-item-meta">
@@ -3563,7 +3576,13 @@ export default function DashboardPage() {
             <div className="store-preview-grid">
               {products.map((prod) => (
                 <div key={prod.id} className="store-product-card">
-                  <div className="store-product-emoji">{prod.emoji}</div>
+                  <div className="store-product-emoji" style={{ overflow: "hidden" }}>
+                    {prod.image ? (
+                      <img src={prod.image} alt={prod.name} style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }} />
+                    ) : (
+                      prod.emoji || "📦"
+                    )}
+                  </div>
                   <div className="store-product-name">{prod.name}</div>
                   <div className="store-product-price">
                     {currency}{prod.price.toLocaleString()}
