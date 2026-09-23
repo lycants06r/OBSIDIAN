@@ -305,6 +305,7 @@ export default function DashboardPage() {
     if (backendStoreId && backendStoreId !== "default") {
       fetchAnalytics(backendStoreId, chartTimeframe);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backendStoreId, chartTimeframe]);
 
   // Automated deployment status polling ref & helper
