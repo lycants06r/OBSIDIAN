@@ -1,0 +1,388 @@
+================================================================================
+OBSIDIAN COMMERCE ENGINE - BACKEND REQUIREMENTS SPECIFICATION
+================================================================================
+Generated for: OBSIDIAN Digital Commerce Platform
+Target Backend URL: https://obsidian-backend-1.onrender.com
+Database: PostgreSQL 15+ (Supabase)
+Storage: Supabase Storage (S3-compatible)
+
+--------------------------------------------------------------------------------
+1. TECHNOLOGY STACK & ARCHITECTURE
+--------------------------------------------------------------------------------
+- Runtime / Language: Node.js (v18+) with Express / Fastify OR Python 3.10+ (FastAPI)
+- Database: PostgreSQL (Managed via Supabase)
+- Authentication: Supabase Auth OR JWT (jsonwebtoken / bcrypt) with Bearer token
+- Realtime: Server-Sent Events (SSE) or Supabase Realtime publication
+- Storage: Supabase Storage (Public bucket: obsidian-assets)
+- Geocoding / Maps: Google Maps Platform API (Geocoding & Place Details)
+- Hosting: Render / Railway / Fly.io / AWS ECS
+
+--------------------------------------------------------------------------------
+2. DATABASE SCHEMA (SUPABASE / POSTGRESQL SQL)
+--------------------------------------------------------------------------------
+Copy and run this SQL script in the Supabase SQL Editor:
+
+-- 1. Enable UUID Extension
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- 2. Merchant Profiles Table
+CREATE TABLE IF NOT EXISTS public.profiles (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    email TEXT UNIQUE NOT NULL,
+    full_name TEXT,
+    role TEXT DEFAULT 'merchant' CHECK (role IN ('merchant', 'admin', 'customer')),
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc', NOW()),
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 3. Stores Table
+CREATE TABLE IF NOT EXISTS public.stores (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    name TEXT NOT NULL DEFAULT 'OBSIDIAN Store',
+    slug TEXT UNIQUE NOT NULL,
+    business_type TEXT DEFAULT 'clothing',
+    description TEXT DEFAULT 'Discover our latest products and shop online.',
+    owner_name TEXT DEFAULT 'Store Owner',
+    currency TEXT DEFAULT '₹',
+    address_method TEXT DEFAULT 'manual' CHECK (address_method IN ('manual', 'map')),
+    address TEXT,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    place_id TEXT,
+    maps_url TEXT,
+    logo_url TEXT,
+    banner_url TEXT,
+    template_id TEXT DEFAULT 'minimal',
+    live_url TEXT,
+    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'draft', 'archived')),
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc', NOW()),
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 4. Products Table
+CREATE TABLE IF NOT EXISTS public.products (
+    id BIGSERIAL PRIMARY KEY,
+    store_id UUID REFERENCES public.stores(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    brand TEXT,
+    category TEXT DEFAULT 'General',
+    types TEXT[],
+    mrp NUMERIC(12, 2) DEFAULT 0.00,
+    selling_price NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    price NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+    discount_percent INT DEFAULT 0,
+    stock INT NOT NULL DEFAULT 0,
+    emoji TEXT DEFAULT '🛍️',
+    description TEXT,
+    image TEXT,
+    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'draft', 'archived')),
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc', NOW()),
+    updated_at TIMESTAMPTZ DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 5. Orders Table
+CREATE TABLE IF NOT EXISTS public.orders (
+    id BIGSERIAL PRIMARY KEY,
+    store_id UUID REFERENCES public.stores(id) ON DELETE CASCADE,
+    customer_name TEXT NOT NULL,
+    customer_email TEXT,
+    customer_phone TEXT,
+    customer_address TEXT,
+    product_id BIGINT REFERENCES public.products(id) ON DELETE SET NULL,
+    product_name TEXT NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
+    total_price NUMERIC(12, 2) NOT NULL,
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'cancelled')),
+    date TIMESTAMPTZ DEFAULT TIMEZONE('utc', NOW()),
+    created_at TIMESTAMPTZ DEFAULT TIMEZONE('utc', NOW())
+);
+
+-- 6. Store Templates Table
+CREATE TABLE IF NOT EXISTS public.store_templates (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT,
+    preview_url TEXT,
+    config JSONB DEFAULT '{}'::jsonb
+);
+
+-- 7. Row-Level Security (RLS) Policies
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.stores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.store_templates ENABLE ROW LEVEL SECURITY;
+
+-- Allow public read on templates, active stores, and products
+CREATE POLICY "Public Read Templates" ON public.store_templates FOR SELECT USING (true);
+CREATE POLICY "Public Read Active Stores" ON public.stores FOR SELECT USING (status = 'active');
+CREATE POLICY "Public Read Active Products" ON public.products FOR SELECT USING (status = 'active');
+
+-- Allow public / guest order creation during checkout
+CREATE POLICY "Public Insert Orders" ON public.orders FOR INSERT WITH CHECK (true);
+
+-- Allow authenticated merchants full CRUD on their own stores, products, orders
+CREATE POLICY "Merchant Stores Policy" ON public.stores FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Merchant Products Policy" ON public.products FOR ALL USING (
+    store_id IN (SELECT id FROM public.stores WHERE user_id = auth.uid())
+);
+CREATE POLICY "Merchant Orders Policy" ON public.orders FOR ALL USING (
+    store_id IN (SELECT id FROM public.stores WHERE user_id = auth.uid())
+);
+
+--------------------------------------------------------------------------------
+3. OBJECT STORAGE SPECIFICATION (SUPABASE STORAGE)
+--------------------------------------------------------------------------------
+- Bucket Name: obsidian-assets
+- Public Bucket: YES (Publicly readable URLs)
+- Max File Size: 5MB per file
+- Allowed File Types:
+    - image/jpeg
+    - image/png
+    - image/webp
+    - image/gif
+    - image/svg+xml
+- Folder Organization:
+    - obsidian-assets/products/   (Product images uploaded by merchants)
+    - obsidian-assets/logos/      (Store brand logos)
+    - obsidian-assets/banners/    (Store hero banner backgrounds)
+
+--------------------------------------------------------------------------------
+4. COMPLETE API ENDPOINTS CONTRACT
+--------------------------------------------------------------------------------
+
+A. SYSTEM & DIAGNOSTICS:
+------------------------
+- GET /health
+  Description: Server health check
+  Response: { "status": "ok", "timestamp": "2026-09-23T..." }
+
+- GET /api/docs/swagger.json
+  Description: OpenAPI 3.0 specification for API docs
+
+B. AUTHENTICATION:
+------------------
+- POST /api/auth/signup
+  Body: { "email": "merchant@example.com", "password": "...", "full_name": "Store Owner" }
+  Response: { "message": "Success", "user": { ... }, "token": "JWT_TOKEN", "session": { ... } }
+
+- POST /api/auth/login
+  Body: { "email": "merchant@example.com", "password": "..." }
+  Response: { "message": "Success", "user": { ... }, "token": "JWT_TOKEN", "session": { ... } }
+
+- GET /api/auth/me
+  Headers: Authorization: Bearer <TOKEN>
+  Response: { "user": { "id": "...", "email": "...", "full_name": "..." } }
+
+- POST /api/auth/update-password
+  Headers: Authorization: Bearer <TOKEN>
+  Body: { "password": "new_password" }
+  Response: { "success": true, "message": "Password updated successfully" }
+
+- POST /api/auth/sync
+  Headers: Authorization: Bearer <TOKEN>
+  Response: { "message": "Synced", "user": { ... } }
+
+C. UNIFIED STATE & MIGRATION:
+-----------------------------
+- GET /api/account/state
+  Headers: Authorization: Bearer <TOKEN>
+  Response: { "user": { ... }, "store": { ... }, "products": [ ... ], "orders": [ ... ], "analytics": { ... } }
+
+- PUT /api/account/state
+  Headers: Authorization: Bearer <TOKEN>
+  Body: { "store": { ... }, "products": [ ... ], "orders": [ ... ] }
+  Response: { "success": true, "state": { ... } }
+
+- POST /api/account/import-local-state
+  Headers: Authorization: Bearer <TOKEN>
+  Body: { "store": { ... }, "products": [ ... ], "orders": [ ... ] }
+  Response: { "success": true, "state": { ... } }
+
+D. STORE MANAGEMENT:
+--------------------
+- GET /api/stores/me
+  Headers: Authorization: Bearer <TOKEN>
+  Response: { "stores": [ ... ], "defaultStore": { ... } }
+
+- POST /api/stores
+  Headers: Authorization: Bearer <TOKEN>
+  Body: { "name": "OBSIDIAN Store", "business_type": "clothing", "owner_name": "...", "currency": "₹" }
+  Response: { "message": "Store created", "store": { ... }, "formattedStore": { ... } }
+
+- GET /api/stores/:storeId
+  Headers: Authorization: Bearer <TOKEN>
+  Response: { "store": { ... }, "formattedStore": { ... } }
+
+- PATCH /api/stores/:storeId
+  Headers: Authorization: Bearer <TOKEN>
+  Body: Partial store object updates (name, currency, description, etc.)
+  Response: { "message": "Store updated", "store": { ... } }
+
+- PATCH /api/stores/:storeId/location
+  Headers: Authorization: Bearer <TOKEN>
+  Body: { "latitude": 28.6139, "longitude": 77.2090, "formattedAddress": "...", "placeId": "..." }
+  Response: { "success": true, "store": { ... } }
+
+- POST /api/stores/:storeId/upload
+  Headers: multipart/form-data
+  FormData:
+    - file: Binary File
+    - category: "product" | "logo" | "banner"
+  Response: { "message": "Upload successful", "url": "https://...", "path": "products/..." }
+
+- POST /api/stores/:storeId/select-template
+  Headers: Authorization: Bearer <TOKEN>
+  Body: { "templateId": "minimal" }
+  Response: { "success": true, "templateId": "minimal" }
+
+E. PRODUCT MANAGEMENT:
+----------------------
+- GET /api/stores/:storeId/products?search=&category=&status=
+  Response: { "products": [ ... ], "rawProducts": [ ... ] }
+
+- POST /api/stores/:storeId/products
+  Headers: Authorization: Bearer <TOKEN>
+  Body: {
+    "name": "Luxury Silk Blazer",
+    "brand": "Obsidian",
+    "category": "Clothing",
+    "mrp": 12999,
+    "sellingPrice": 8999,
+    "stock": 25,
+    "types": ["Black", "Slim Fit"],
+    "description": "...",
+    "image": "https://..."
+  }
+  Response: { "message": "Product created", "product": { ... } }
+
+- PUT /api/stores/:storeId/products/:productId
+  Headers: Authorization: Bearer <TOKEN>
+  Body: Updated product fields
+  Response: { "message": "Product updated", "product": { ... } }
+
+- PATCH /api/stores/:storeId/products/:productId/stock
+  Headers: Authorization: Bearer <TOKEN>
+  Body: { "delta": 10 } OR { "stock": 50 }
+  Response: { "message": "Stock adjusted", "product": { ... } }
+
+- DELETE /api/stores/:storeId/products/:productId
+  Headers: Authorization: Bearer <TOKEN>
+  Response: { "message": "Product deleted", "deletedId": 123 }
+
+- DELETE /api/stores/:storeId/products
+  Headers: Authorization: Bearer <TOKEN>
+  Response: { "success": true, "clearedCount": 15 }
+
+F. ORDER MANAGEMENT:
+--------------------
+- GET /api/stores/:storeId/orders
+  Headers: Authorization: Bearer <TOKEN>
+  Response: { "orders": [ ... ], "rawOrders": [ ... ] }
+
+- POST /api/stores/:storeId/orders
+  Public access (called during customer checkout)
+  Body: {
+    "customerName": "Ranit Dutta",
+    "customerEmail": "ranit@example.com",
+    "customerPhone": "+91 9876543210",
+    "customerAddress": "123 Park Street, Kolkata",
+    "productId": 1,
+    "productName": "Luxury Silk Blazer",
+    "quantity": 1,
+    "totalPrice": 8999
+  }
+  Response: { "message": "Order placed successfully", "order": { ... }, "remainingStock": 24 }
+
+- PATCH /api/stores/:storeId/orders/:orderId/status
+  Headers: Authorization: Bearer <TOKEN>
+  Body: { "status": "pending" | "processing" | "completed" | "cancelled" }
+  Response: { "message": "Order status updated", "order": { ... } }
+
+- DELETE /api/stores/:storeId/orders/:orderId
+  Headers: Authorization: Bearer <TOKEN>
+  Response: { "message": "Order deleted", "deletedId": 456 }
+
+- DELETE /api/stores/:storeId/orders
+  Headers: Authorization: Bearer <TOKEN>
+  Response: { "success": true, "clearedCount": 10 }
+
+G. ANALYTICS & REALTIME:
+------------------------
+- GET /api/stores/:storeId/analytics?timeframe=daily|weekly|monthly|yearly
+  Headers: Authorization: Bearer <TOKEN>
+  Response: {
+    "totalRevenue": 142500,
+    "totalOrders": 38,
+    "chartData": [
+      { "label": "Week 1", "sales": 32000 },
+      { "label": "Week 2", "sales": 45000 },
+      { "label": "Week 3", "sales": 28500 },
+      { "label": "Week 4", "sales": 37000 }
+    ]
+  }
+
+- GET /api/stores/:storeId/realtime
+  Protocol: Server-Sent Events (SSE)
+  Events emitted:
+    - event: order_created -> { type: "order_created", payload: { order: ... } }
+    - event: stock_updated -> { type: "stock_updated", payload: { product: ... } }
+
+H. PUBLIC STOREFRONT (NO AUTHENTICATION REQUIRED):
+--------------------------------------------------
+- GET /api/public/store/:slug
+  Description: Retrieves public store configuration, published products, and template
+  Response: {
+    "store": { "id": "...", "name": "...", "slug": "...", "logo_url": "...", "currency": "₹" },
+    "products": [ ... ],
+    "template": { "id": "minimal", ... }
+  }
+
+- GET /api/templates
+  Description: Lists available storefront design themes
+  Response: { "templates": [ ... ] }
+
+I. GOOGLE MAPS PLATFORM (OPTIONAL INTEGRATION):
+-----------------------------------------------
+- POST /api/maps/geocode
+  Body: { "address": "Park Street, Kolkata" }
+  Response: { "success": true, "data": { "lat": 22.5516, "lng": 88.3524, ... } }
+
+- POST /api/maps/place-details
+  Body: { "placeId": "ChIJ..." }
+  Response: { "success": true, "data": { ... } }
+
+--------------------------------------------------------------------------------
+5. ENVIRONMENT CONFIGURATION (.env)
+--------------------------------------------------------------------------------
+
+A. Backend Service .env (e.g. on Render / Local):
+-------------------------------------------------
+PORT=5000
+NODE_ENV=production
+
+# Supabase Database & Auth Configuration
+SUPABASE_URL=https://<your-project-ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<your-supabase-service-role-key>
+DATABASE_URL=postgresql://postgres:<db-password>@db.<ref>.supabase.co:5432/postgres
+
+# JWT Secret (for custom token generation)
+JWT_SECRET=super_secret_obsidian_jwt_key_at_least_32_chars_long
+
+# CORS Allowed Origins
+CORS_ORIGIN=http://localhost:3000,https://obsidian-store.vercel.app
+
+# Optional Google Maps API Key
+GOOGLE_MAPS_API_KEY=AIzaSy...
+
+B. Frontend .env.local (Next.js Application):
+---------------------------------------------
+NEXT_PUBLIC_BACKEND_URL=https://obsidian-backend-1.onrender.com
+NEXT_PUBLIC_API_URL=https://obsidian-backend-1.onrender.com
+NEXT_PUBLIC_SUPABASE_URL=https://<your-project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-supabase-anon-key>
+
+================================================================================
+END OF SPECIFICATION
+================================================================================
