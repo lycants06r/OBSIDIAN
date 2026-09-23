@@ -46,7 +46,7 @@ export default function DashboardPage() {
   const router = useRouter();
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<"overview" | "products" | "orders" | "settings">("settings");
+  const [activeTab, setActiveTab] = useState<"overview" | "products" | "orders" | "settings" | "deployment">("settings");
 
   // Profile States
   const [ownerName, setOwnerName] = useState("Store Owner");
@@ -1011,6 +1011,15 @@ export default function DashboardPage() {
             <span className="nav-icon">⚙️</span>
             <span>Store Settings</span>
           </button>
+
+          <button
+            className={`db-nav-item ${activeTab === "deployment" ? "active" : ""}`}
+            onClick={() => setActiveTab("deployment")}
+            data-cursor="link"
+          >
+            <span className="nav-icon">🚀</span>
+            <span>DEPLOYMENT</span>
+          </button>
         </nav>
 
         {/* Sidebar Footer */}
@@ -1041,7 +1050,7 @@ export default function DashboardPage() {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
               <h1 className="db-welcome-title">
-                {activeTab === "overview" ? "Overview & Performance" : activeTab === "products" ? "Product Catalog" : activeTab === "orders" ? "Customer Orders" : "Store Settings"}
+                {activeTab === "overview" ? "Overview & Performance" : activeTab === "products" ? "Product Catalog" : activeTab === "orders" ? "Customer Orders" : activeTab === "deployment" ? "DEPLOYMENT" : "Store Settings"}
               </h1>
               <span className="stitch-live-pill">
                 <span className="stitch-live-dot" />
@@ -1503,59 +1512,7 @@ export default function DashboardPage() {
 
                 {/* ── TOP-RIGHT: STOREFRONT HUB & OPERATIONS (BALANCED HEIGHT) ── */}
                 <div className="stitch-side-column">
-                  {/* Card 1: Storefront Hub (Link + QR + Integrated Quick Actions) */}
-                  <div className="stitch-glass-panel stitch-side-card" data-purpose="storefront-hub-card">
-                    <div className="stitch-card-header">
-                      <div className="stitch-card-title-wrap">
-                        <span className="stitch-icon-badge" style={{ background: "rgba(124, 58, 237, 0.1)", color: "#7c3aed", width: 24, height: 24 }}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                          </svg>
-                        </span>
-                        <h3 className="stitch-card-title">Storefront Hub</h3>
-                      </div>
-                      <span className="stitch-live-pill">
-                        <span className="stitch-live-dot" />
-                        Live
-                      </span>
-                    </div>
-
-                    {/* Store Link URL Box */}
-                    <div className="stitch-link-box">
-                      <span className="stitch-link-text">
-                        {storefrontUrl || `http://localhost:3000/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
-                      </span>
-                      <button className="stitch-copy-btn" onClick={copyStoreLink} type="button">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                        Copy
-                      </button>
-                    </div>
-
-                    {/* Quick Link Footer */}
-                    <div className="stitch-link-footer">
-                      <a
-                        href={`/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="stitch-link-btn"
-                      >
-                        Open storefront ↗
-                      </a>
-                      <button
-                        className="stitch-link-btn"
-                        style={{ color: "var(--nm-text-muted)" }}
-                        onClick={() => setShowQrModal(true)}
-                        type="button"
-                      >
-                        📷 QR Code
-                      </button>
-                    </div>
-
-                  </div>
-
-                  {/* Card 2: Operations & Growth Hub (Low Stock & Active Festive Offer) */}
+                  {/* Operations & Growth Hub (Low Stock & Active Festive Offer) */}
                   <div className="stitch-glass-panel stitch-ops-card" data-purpose="operations-growth-card">
                     <div className="stitch-card-header" style={{ marginBottom: 4 }}>
                       <div className="stitch-card-title-wrap">
@@ -2382,6 +2339,71 @@ export default function DashboardPage() {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* ── TAB: DEPLOYMENT ── */}
+        {activeTab === "deployment" && (
+          <div className="db-panel" style={{ maxWidth: 760 }}>
+            <div className="db-panel-header">
+              <div>
+                <h2 className="db-panel-title">
+                  <span>🚀</span> DEPLOYMENT
+                </h2>
+                <p className="db-panel-subtitle">Live storefront distribution & connectivity</p>
+              </div>
+            </div>
+
+            {/* Storefront Hub (Link + QR + Integrated Quick Actions) */}
+            <div className="stitch-glass-panel stitch-side-card" data-purpose="storefront-hub-card">
+              <div className="stitch-card-header">
+                <div className="stitch-card-title-wrap">
+                  <span className="stitch-icon-badge" style={{ background: "rgba(124, 58, 237, 0.1)", color: "#7c3aed", width: 24, height: 24 }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                    </svg>
+                  </span>
+                  <h3 className="stitch-card-title">Storefront Hub</h3>
+                </div>
+                <span className="stitch-live-pill">
+                  <span className="stitch-live-dot" />
+                  Live
+                </span>
+              </div>
+
+              {/* Store Link URL Box */}
+              <div className="stitch-link-box">
+                <span className="stitch-link-text">
+                  {storefrontUrl || `http://localhost:3000/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
+                </span>
+                <button className="stitch-copy-btn" onClick={copyStoreLink} type="button">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Copy
+                </button>
+              </div>
+
+              {/* Quick Link Footer */}
+              <div className="stitch-link-footer">
+                <a
+                  href={`/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="stitch-link-btn"
+                >
+                  Open storefront ↗
+                </a>
+                <button
+                  className="stitch-link-btn"
+                  style={{ color: "var(--nm-text-muted)" }}
+                  onClick={() => setShowQrModal(true)}
+                  type="button"
+                >
+                  📷 QR Code
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </main>
