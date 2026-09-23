@@ -341,7 +341,7 @@
 
         renderSummary();
 
-        function handlePlaceOrder(e) {
+        async function handlePlaceOrder(e) {
             e.preventDefault();
             if (cart.length === 0) {
                 alert("Cart is empty! Please add items from the store first.");
@@ -360,6 +360,21 @@
                 return sum + (price * item.quantity);
             }, 0);
 
+            const totalQuantity = cart.reduce((q, i) => q + Number(i.quantity || 1), 0);
+            const summaryProductName = cart.map(i => `${i.name} (x${i.quantity})`).join(", ");
+
+            // Build items array matching Swagger schema
+            const orderItems = cart.map(item => {
+                const itemPrice = item.discountPrice > 0 ? item.discountPrice : item.price;
+                const pId = typeof item.id === "number" ? item.id : parseInt(item.id) || item.id;
+                return {
+                    productId: pId,
+                    productName: item.name,
+                    quantity: Number(item.quantity || 1),
+                    price: Number(itemPrice || 0)
+                };
+            });
+
             // Read existing orders
             let existingOrders = [];
             try {
@@ -368,69 +383,123 @@
             } catch (err) { }
 
             const orderDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+            const orderId = Date.now();
 
             // Create new order record
-            const newOrder = {
-                id: Date.now(),
+            let newOrder = {
+                id: orderId,
                 customerName: customerName,
-                productName: cart.map(i => `${i.name} (x${i.quantity})`).join(", "),
-                productId: cart[0]?.id || 0,
-                quantity: cart.reduce((q, i) => q + i.quantity, 0),
+                customerPhone: customerPhone,
+                customerAddress: customerAddress,
+                paymentMethod: paymentMethod,
+                items: orderItems,
+                productName: summaryProductName,
+                productId: orderItems[0]?.productId || 0,
+                quantity: totalQuantity,
                 totalPrice: total,
+                totalAmount: total,
                 status: "processing",
                 date: orderDate,
                 phone: customerPhone,
-                address: customerAddress,
-                paymentMethod: paymentMethod
+                address: customerAddress
             };
 
-            const updatedOrders = [newOrder, ...existingOrders];
+            // Payload strictly matching Swagger schema for POST /api/stores/:storeId/orders
+            const payload = {
+                id: orderId,
+                customerName: customerName,
+                customerPhone: customerPhone,
+                customerAddress: customerAddress,
+                paymentMethod: paymentMethod,
+                items: orderItems,
+                productName: summaryProductName,
+                productId: orderItems[0]?.productId || null,
+                quantity: totalQuantity,
+                totalPrice: total,
+                totalAmount: total,
+                status: "processing"
+            };
 
-            // Save orders to localStorage (synced with dashboard)
-            localStorage.setItem("obsidian_orders", JSON.stringify(updatedOrders));
-            localStorage.setItem("orders", JSON.stringify(updatedOrders));
+            // Identify target store ID
+            const urlParams = new URLSearchParams(window.location.search);
+            const targetStoreId = urlParams.get("storeId") || urlParams.get("store_id") || localStorage.getItem("obsidian_store_id") || localStorage.getItem("storeId") || "default";
 
-            // Decrement stock in catalog
-            try {
-                let prods = JSON.parse(localStorage.getItem("products") || localStorage.getItem("obsidian_products") || "[]");
-                if (Array.isArray(prods) && prods.length > 0) {
-                    cart.forEach(cartItem => {
-                        const match = prods.find(p => String(p.id) === String(cartItem.id));
-                        if (match && typeof match.stock === "number") {
-                            match.stock = Math.max(0, match.stock - cartItem.quantity);
-                        }
-                    });
-                    localStorage.setItem("products", JSON.stringify(prods));
-                    localStorage.setItem("obsidian_products", JSON.stringify(prods));
-                }
-            } catch (err) { }
-
-            // Asynchronously dispatch order to backend API
-            const backendBaseUrl = window.location.origin;
-            const targetStoreId = localStorage.getItem("obsidian_store_id") || localStorage.getItem("storeId") || "default";
-            try {
-                fetch(`${backendBaseUrl}/api/stores/${encodeURIComponent(targetStoreId)}/orders`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        id: newOrder.id,
-                        customerName: newOrder.customerName,
-                        productName: newOrder.productName,
-                        productId: newOrder.productId,
-                        quantity: newOrder.quantity,
-                        totalPrice: newOrder.totalPrice,
-                        status: newOrder.status,
-                    }),
-                }).catch(() => {
-                    // Fail silently into local storage
-                });
-            } catch (err) {
-                // Ignore network errors in offline mode
+            const submitBtn = document.querySelector(".place-order-btn");
+            const originalBtnText = submitBtn ? submitBtn.innerHTML : "Confirm & Place Order 🎉";
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = "Placing Order... ⏳";
             }
 
-            // Display success screen
-            document.getElementById("checkoutMain").style.display = "none";
-            document.getElementById("orderSuccess").style.display = "block";
+            try {
+                // If backend store ID is present, make the authoritative POST request
+                if (targetStoreId && targetStoreId !== "default") {
+                    const res = await fetch(`/api/stores/${encodeURIComponent(targetStoreId)}/orders`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                    });
+
+                    if (!res.ok) {
+                        let errMsg = `Server returned status ${res.status}`;
+                        try {
+                            const errData = await res.json();
+                            errMsg = errData.message || errData.error || errMsg;
+                        } catch (e) { }
+                        throw new Error(errMsg);
+                    }
+
+                    const resData = await res.json();
+                    if (resData.order) {
+                        newOrder = {
+                            ...newOrder,
+                            id: resData.order.id || newOrder.id,
+                            customerName: resData.order.customerName || newOrder.customerName,
+                            productName: resData.order.productName || newOrder.productName,
+                            productId: resData.order.productId || newOrder.productId,
+                            quantity: resData.order.quantity || newOrder.quantity,
+                            totalPrice: resData.order.totalPrice || newOrder.totalPrice,
+                            status: resData.order.status || newOrder.status,
+                            date: resData.order.date || newOrder.date,
+                        };
+                    }
+                }
+
+                // Update local storage orders
+                const updatedOrders = [newOrder, ...existingOrders];
+                localStorage.setItem("obsidian_orders", JSON.stringify(updatedOrders));
+                localStorage.setItem("orders", JSON.stringify(updatedOrders));
+
+                // Decrement stock in local catalog
+                try {
+                    let prods = JSON.parse(localStorage.getItem("products") || localStorage.getItem("obsidian_products") || "[]");
+                    if (Array.isArray(prods) && prods.length > 0) {
+                        cart.forEach(cartItem => {
+                            const match = prods.find(p => String(p.id) === String(cartItem.id));
+                            if (match && typeof match.stock === "number") {
+                                match.stock = Math.max(0, match.stock - cartItem.quantity);
+                            }
+                        });
+                        localStorage.setItem("products", JSON.stringify(prods));
+                        localStorage.setItem("obsidian_products", JSON.stringify(prods));
+                    }
+                } catch (err) { }
+
+                // Clear cart on successful order
+                localStorage.removeItem("cart");
+                cart = [];
+
+                // Display success screen
+                document.getElementById("checkoutMain").style.display = "none";
+                document.getElementById("orderSuccess").style.display = "block";
+            } catch (err) {
+                console.error("Order submission failed:", err);
+                alert(`Could not place order: ${err.message || "Please check your network and try again."}`);
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalBtnText;
+                }
+            }
         }
     </script>
 
