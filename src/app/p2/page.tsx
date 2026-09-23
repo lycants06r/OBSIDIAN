@@ -229,6 +229,7 @@ export default function DashboardPage() {
   }, [showToast]);
 
   // Storefront live URL state
+  const [storeSlug, setStoreSlug] = useState<string>("");
   const [storefrontUrl, setStorefrontUrl] = useState("");
 
   // Backend Integration States
@@ -353,6 +354,9 @@ export default function DashboardPage() {
         storedStoreId = localStorage.getItem("obsidian_store_id") || "";
         if (storedStoreId) setBackendStoreId(storedStoreId);
 
+        const storedSlug = localStorage.getItem("storeSlug") || "";
+        if (storedSlug) setStoreSlug(storedSlug);
+
         const storedDeployUrl = localStorage.getItem("obsidian_deployment_url");
         if (storedDeployUrl) setDeploymentUrl(storedDeployUrl);
 
@@ -460,7 +464,10 @@ export default function DashboardPage() {
           setBackendStoreId(storeData.id);
           localStorage.setItem("obsidian_store_id", storeData.id);
 
-          if (storeData.slug) localStorage.setItem("storeSlug", storeData.slug);
+          if (storeData.slug) {
+            setStoreSlug(storeData.slug);
+            localStorage.setItem("storeSlug", storeData.slug);
+          }
           if (storeData.live_url || storeData.deploymentUrl) {
             setDeploymentUrl(storeData.live_url || storeData.deploymentUrl);
           }
@@ -765,6 +772,7 @@ export default function DashboardPage() {
                   localStorage.setItem("obsidian_selected_template_id", sTpl);
                 }
                 if (st.slug) {
+                  setStoreSlug(st.slug);
                   localStorage.setItem("storeSlug", st.slug);
                 }
               }
@@ -937,6 +945,9 @@ export default function DashboardPage() {
         const storedOfflineDeployUrl = localStorage.getItem("obsidian_deployment_url");
         if (storedOfflineDeployUrl) setDeploymentUrl(storedOfflineDeployUrl);
 
+        const storedOfflineSlug = localStorage.getItem("storeSlug");
+        if (storedOfflineSlug) setStoreSlug(storedOfflineSlug);
+
         setShopName(storedShop);
         setBusinessType(storedType);
         setCurrency(storedCurrency);
@@ -955,14 +966,18 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // Compute live storefront URL dynamically based on shopName and current origin
+  // Compute live storefront URL dynamically based on authoritative backend storeSlug and current origin
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const storeSlug = shopName.toLowerCase().replace(/\s+/g, "-");
+      const activeSlug = storeSlug || localStorage.getItem("storeSlug") || "";
       const base = window.location.origin || "http://localhost:3000";
-      setStorefrontUrl(`${base}/p3.html?slug=${storeSlug}`);
+      if (activeSlug) {
+        setStorefrontUrl(`${base}/p3.html?slug=${encodeURIComponent(activeSlug)}`);
+      } else {
+        setStorefrontUrl(`${base}/p3.html`);
+      }
     }
-  }, [shopName]);
+  }, [storeSlug]);
 
   // Real-time synchronization when orders are placed or products updated in other tabs
   useEffect(() => {
@@ -1682,9 +1697,9 @@ export default function DashboardPage() {
 
   // Copy Store Link (dynamic localhost/current domain)
   const copyStoreLink = () => {
-    const storeSlug = shopName.toLowerCase().replace(/\s+/g, "-");
+    const activeSlug = storeSlug || (typeof window !== "undefined" ? localStorage.getItem("storeSlug") : "") || "";
     const base = typeof window !== "undefined" && window.location.origin ? window.location.origin : "http://localhost:3000";
-    const link = `${base}/p3.html?slug=${storeSlug}`;
+    const link = deploymentUrl || (activeSlug ? `${base}/p3.html?slug=${encodeURIComponent(activeSlug)}` : `${base}/p3.html`);
     navigator.clipboard.writeText(link);
     triggerToast("Live store link copied to clipboard! 📋");
   };
@@ -1761,7 +1776,7 @@ export default function DashboardPage() {
 
     const payload = {
       name: shopName.trim(),
-      slug: shopName.trim().toLowerCase().replace(/\s+/g, "-"),
+      slug: storeSlug || undefined,
       owner_name: ownerName.trim(),
       ownerName: ownerName.trim(),
       business_type: finalBusinessType,
@@ -1884,6 +1899,7 @@ export default function DashboardPage() {
         }
 
         if (savedStore.slug) {
+          setStoreSlug(savedStore.slug);
           localStorage.setItem("storeSlug", savedStore.slug);
         }
       } else {
@@ -3186,7 +3202,7 @@ export default function DashboardPage() {
                     required
                   />
                   <span style={{ fontSize: "0.72rem", color: "var(--nm-text-light)" }}>
-                    Defines your storefront slug: /p3.html?slug={shopName.toLowerCase().replace(/\s+/g, "-")}
+                    Defines your storefront slug: {storeSlug ? `/p3.html?slug=${encodeURIComponent(storeSlug)}` : "/p3.html"}
                   </span>
                 </div>
               </div>
@@ -3671,7 +3687,11 @@ export default function DashboardPage() {
               {/* Store Link URL Box */}
               <div className="stitch-link-box">
                 <span className="stitch-link-text">
-                  {deploymentUrl || storefrontUrl || `http://localhost:3000/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
+                  {deploymentUrl ||
+                    storefrontUrl ||
+                    (storeSlug
+                      ? `http://localhost:3000/p3.html?slug=${encodeURIComponent(storeSlug)}`
+                      : "http://localhost:3000/p3.html")}
                 </span>
                 <button className="stitch-copy-btn" onClick={copyStoreLink} type="button">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -3684,7 +3704,11 @@ export default function DashboardPage() {
               {/* Quick Link Footer */}
               <div className="stitch-link-footer" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <a
-                  href={deploymentUrl || `/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
+                  href={
+                    deploymentUrl ||
+                    storefrontUrl ||
+                    (storeSlug ? `/p3.html?slug=${encodeURIComponent(storeSlug)}` : "/p3.html")
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="stitch-link-btn"
@@ -4181,7 +4205,11 @@ export default function DashboardPage() {
                 📋 Copy Store Link
               </button>
               <a
-                href={`/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
+                href={
+                  deploymentUrl ||
+                  storefrontUrl ||
+                  (storeSlug ? `/p3.html?slug=${encodeURIComponent(storeSlug)}` : "/p3.html")
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 className="db-btn db-btn-secondary"
@@ -4514,7 +4542,11 @@ export default function DashboardPage() {
                 Scan to Open {shopName}
               </h4>
               <p style={{ color: "var(--nm-text-muted)", fontSize: "0.78rem", maxWidth: 300, margin: "0 auto 18px", wordBreak: "break-all" }}>
-                {storefrontUrl || `http://localhost:3000/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
+                {deploymentUrl ||
+                  storefrontUrl ||
+                  (storeSlug
+                    ? `http://localhost:3000/p3.html?slug=${encodeURIComponent(storeSlug)}`
+                    : "http://localhost:3000/p3.html")}
               </p>
 
               <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
