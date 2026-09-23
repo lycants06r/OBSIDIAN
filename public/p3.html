@@ -1702,37 +1702,70 @@
 
             try {
                 const res = await fetch(`${window.location.origin}/api/public/store/${encodeURIComponent(slug)}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.store) {
-                        localStorage.setItem("shopName", data.store.name || "My Store");
-                        if (data.store.business_type) localStorage.setItem("businessType", data.store.business_type);
-                        if (data.store.currency) localStorage.setItem("storeCurrency", data.store.currency);
-                        if (data.store.id) localStorage.setItem("obsidian_store_id", data.store.id);
-                    }
-                    if (Array.isArray(data.products) && data.products.length > 0) {
-                        const formattedProducts = data.products.map(p => ({
-                            id: p.client_id || p.id,
-                            name: p.name,
-                            price: p.price,
-                            discountPrice: p.discount_price || p.discountPrice,
-                            stock: p.stock ?? 10,
-                            emoji: p.emoji || '📦',
-                            category: p.category || 'General',
-                            description: p.description || '',
-                            image: p.image_url || p.image || null,
-                            status: p.status || 'active'
-                        }));
-                        products = formattedProducts;
-                        localStorage.setItem("products", JSON.stringify(formattedProducts));
-                        localStorage.setItem("obsidian_products", JSON.stringify(formattedProducts));
-                    }
-                    refreshStoreMeta();
-                    renderCategories();
-                    renderProducts();
+
+                if (!res.ok) {
+                    // 404 = store not found, 500 = server error — fall back to localStorage gracefully
+                    console.warn(`[Storefront] Backend returned ${res.status} for slug "${slug}". Using cached data.`);
+                    return;
                 }
+
+                const data = await res.json();
+
+                // ── Hydrate store metadata from backend ──
+                if (data.store) {
+                    const s = data.store;
+                    if (s.name) { localStorage.setItem("shopName", s.name); }
+                    if (s.business_type) localStorage.setItem("businessType", s.business_type);
+                    if (s.currency) { localStorage.setItem("storeCurrency", s.currency); localStorage.setItem("currency", s.currency); }
+                    if (s.id) localStorage.setItem("obsidian_store_id", s.id);
+                    if (s.slug) localStorage.setItem("storeSlug", s.slug);
+                    // Logo and banner from backend
+                    if (s.logo_url) localStorage.setItem("storeLogo", s.logo_url);
+                    else if (s.logo_url === null) localStorage.removeItem("storeLogo");
+                    if (s.banner_url) localStorage.setItem("storeBanner", s.banner_url);
+                    else if (s.banner_url === null) localStorage.removeItem("storeBanner");
+                    // Store description
+                    if (s.description) localStorage.setItem("storeDescription", s.description);
+                    // Selected template
+                    if (s.selected_template_id) localStorage.setItem("obsidian_selected_template_id", s.selected_template_id);
+                }
+
+                // ── Hydrate products from backend ──
+                if (Array.isArray(data.products) && data.products.length > 0) {
+                    const formattedProducts = data.products.map(p => ({
+                        // IDs: prefer client_id (numeric) over backend UUID
+                        id: p.client_id !== undefined ? p.client_id : p.id,
+                        name: p.name,
+                        // Pricing — map all backend price fields
+                        price: p.price || p.sellingPrice || p.selling_price || 0,
+                        mrp: p.mrp || p.price || 0,
+                        sellingPrice: p.sellingPrice || p.selling_price || p.price || 0,
+                        discountPercent: p.discountPercent || p.discount_percent || 0,
+                        discountPrice: p.discount_price || p.discountPrice || null,
+                        // Inventory
+                        stock: p.stock !== undefined ? p.stock : 10,
+                        // Display
+                        emoji: p.emoji || '📦',
+                        brand: p.brand || null,
+                        types: Array.isArray(p.types) ? p.types : [],
+                        category: p.category || 'General',
+                        description: p.description || '',
+                        // Image: prefer image_url (backend field) over image
+                        image: p.image_url || p.image || null,
+                        status: p.status || 'active'
+                    }));
+                    products = formattedProducts;
+                    localStorage.setItem("products", JSON.stringify(formattedProducts));
+                    localStorage.setItem("obsidian_products", JSON.stringify(formattedProducts));
+                }
+
+                // Re-render with fresh backend data
+                refreshStoreMeta();
+                renderCategories();
+                renderProducts();
             } catch (err) {
-                // Ignore network errors; fallback gracefully to localStorage
+                // Network error — fall back gracefully to localStorage, no fake success
+                console.warn("[Storefront] Network error fetching live store data:", err);
             }
         }
 
