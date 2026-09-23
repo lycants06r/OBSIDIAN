@@ -296,6 +296,11 @@ export const api = {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }),
 
+  getOrderDetails: (storeId: string, orderId: string | number, token?: string) =>
+    apiRequest<{ order: any }>(`/api/stores/${storeId}/orders/${orderId}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    }),
+
   createOrder: (storeId: string, orderData: any) =>
     apiRequest<{ message: string; order: any; remainingStock?: number }>(`/api/stores/${storeId}/orders`, {
       method: "POST",

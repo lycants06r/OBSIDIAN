@@ -477,9 +477,20 @@ export default function DashboardPage() {
             } else if (event.type === "PRODUCT_DELETED" && event.payload?.id) {
               setProducts((prev) => prev.filter((p) => String(p.id) !== String(event.payload.id)));
             } else if (event.type === "ORDER_CREATED" && event.payload?.order) {
-              setOrders((prev) => [event.payload.order, ...prev]);
-            } else if (event.type === "ORDER_UPDATED" && event.payload?.order) {
-              setOrders((prev) => prev.map((o) => (o.id === event.payload.order.id ? event.payload.order : o)));
+              setOrders((prev) => [event.payload.order, ...prev.filter((o) => String(o.id) !== String(event.payload.order.id))]);
+            } else if (
+              (event.type === "ORDER_UPDATED" || event.type === "ORDER_STATUS_UPDATED") &&
+              (event.payload?.order || event.payload?.id)
+            ) {
+              const updatedOrd = event.payload.order;
+              if (updatedOrd) {
+                setOrders((prev) => prev.map((o) => (String(o.id) === String(updatedOrd.id) ? { ...o, ...updatedOrd } : o)));
+              } else if (event.payload?.id && event.payload?.status) {
+                setOrders((prev) => prev.map((o) => (String(o.id) === String(event.payload.id) ? { ...o, status: event.payload.status } : o)));
+              }
+            } else if (event.type === "ORDER_DELETED" && (event.payload?.id || event.payload?.orderId)) {
+              const targetId = event.payload.id || event.payload.orderId;
+              setOrders((prev) => prev.filter((o) => String(o.id) !== String(targetId)));
             } else if (event.type === "STOCK_UPDATED") {
               setProducts((prev) =>
                 prev.map((p) => (String(p.id) === String(event.payload.productId) ? { ...p, stock: event.payload.stock } : p))
@@ -533,13 +544,45 @@ export default function DashboardPage() {
           setProducts([]);
         }
 
-        // ── Hydrate orders from DB (authoritative) ──
-        if (Array.isArray(state.orders) && state.orders.length > 0) {
-          setOrders(state.orders);
-          localStorage.setItem("obsidian_orders", JSON.stringify(state.orders));
-          localStorage.setItem("orders", JSON.stringify(state.orders));
+        // ── Hydrate orders from DB (authoritative) via GET /api/stores/:storeId/orders ──
+        let serverOrders: Order[] = [];
+        if (activeStoreId && activeStoreId !== "default") {
+          try {
+            const orderRes = await api.getOrders(activeStoreId);
+            const fetched = Array.isArray(orderRes)
+              ? orderRes
+              : Array.isArray(orderRes?.orders)
+              ? orderRes.orders
+              : Array.isArray(orderRes?.rawOrders)
+              ? orderRes.rawOrders
+              : [];
+
+            if (fetched.length > 0) {
+              serverOrders = fetched.map((o: any) => ({
+                id: o.id || o._id || Date.now(),
+                customerName: o.customerName || o.customer_name || o.customer || "Customer",
+                productName: o.productName || o.product_name || o.product || "Product",
+                productId: o.productId || o.product_id || 0,
+                quantity: Number(o.quantity || o.qty || 1),
+                totalPrice: Number(o.totalPrice || o.total_price || o.total || o.price || 0),
+                status: o.status || "pending",
+                date: o.date || o.createdAt || o.created_at || "Just now",
+              }));
+            }
+          } catch (e) {
+            console.warn("Failed to fetch orders directly via getOrders:", e);
+          }
+        }
+
+        if (serverOrders.length === 0 && Array.isArray(state.orders) && state.orders.length > 0) {
+          serverOrders = state.orders;
+        }
+
+        if (serverOrders.length > 0) {
+          setOrders(serverOrders);
+          localStorage.setItem("obsidian_orders", JSON.stringify(serverOrders));
+          localStorage.setItem("orders", JSON.stringify(serverOrders));
         } else {
-          // No orders in DB
           setOrders(initialOrders);
         }
 
@@ -879,10 +922,19 @@ export default function DashboardPage() {
     }
   };
 
-  const handleClearAllOrders = () => {
+  const handleClearAllOrders = async () => {
     if (confirm("Remove all orders from your dashboard?")) {
-      updateOrderList([]);
-      triggerToast("All orders removed.");
+      const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id");
+      try {
+        if (targetStoreId && targetStoreId !== "default") {
+          await api.clearOrders(targetStoreId);
+        }
+        updateOrderList([]);
+        triggerToast("All orders removed.");
+      } catch (err: any) {
+        console.error("Clear orders error:", err);
+        triggerToast(err.message || "Failed to clear orders on backend ❌");
+      }
     }
   };
 
@@ -1092,7 +1144,7 @@ export default function DashboardPage() {
   };
 
   // Order Submission
-  const handleOrderSubmit = (e: React.FormEvent) => {
+  const handleOrderSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!orderCustomer.trim() || !orderProductId) {
       triggerToast("Please choose a customer name and product");
@@ -1111,53 +1163,131 @@ export default function DashboardPage() {
     }
 
     const finalPrice = targetProduct.price * orderQty;
-    const newOrder: Order = {
-      id: Date.now(),
-      customerName: orderCustomer.trim(),
-      productName: targetProduct.name,
-      productId: targetProduct.id,
-      quantity: orderQty,
-      totalPrice: finalPrice,
-      status: "completed",
-      date: "Just now",
-    };
+    const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id");
 
-    // Deduct stock
-    const nextStock = targetProduct.stock - orderQty;
-    const updatedProducts = products.map((p) =>
-      p.id === targetProduct.id ? { ...p, stock: nextStock } : p
-    );
+    if (targetStoreId && targetStoreId !== "default") {
+      try {
+        const res = await api.createOrder(targetStoreId, {
+          customerName: orderCustomer.trim(),
+          productName: targetProduct.name,
+          productId: targetProduct.id,
+          quantity: orderQty,
+          totalPrice: finalPrice,
+          status: "completed",
+        });
 
-    updateProductList(updatedProducts);
-    updateOrderList([newOrder, ...orders]);
-    setShowOrderModal(false);
-    setOrderCustomer("");
-    setOrderProductId("");
-    setOrderQty(1);
-    setOrderCalculatedPrice(0);
-    triggerToast(`Order placed for ${orderCustomer.trim()} (${currency}${finalPrice.toLocaleString()})`);
+        const createdOrder: Order = {
+          id: res.order?.id || res.order?._id || Date.now(),
+          customerName: res.order?.customerName || orderCustomer.trim(),
+          productName: res.order?.productName || targetProduct.name,
+          productId: res.order?.productId || targetProduct.id,
+          quantity: res.order?.quantity || orderQty,
+          totalPrice: res.order?.totalPrice || finalPrice,
+          status: res.order?.status || "completed",
+          date: res.order?.date || "Just now",
+        };
+
+        const nextStock = typeof res.remainingStock === "number" ? res.remainingStock : Math.max(0, targetProduct.stock - orderQty);
+        const updatedProducts = products.map((p) =>
+          String(p.id) === String(targetProduct.id) ? { ...p, stock: nextStock } : p
+        );
+
+        updateProductList(updatedProducts);
+        updateOrderList([createdOrder, ...orders]);
+        setShowOrderModal(false);
+        setOrderCustomer("");
+        setOrderProductId("");
+        setOrderQty(1);
+        setOrderCalculatedPrice(0);
+        triggerToast(`Order placed for ${orderCustomer.trim()} (${currency}${finalPrice.toLocaleString()}) ✅`);
+      } catch (err: any) {
+        console.error("Failed to create order on backend:", err);
+        triggerToast(err.message || "Failed to create order on backend ❌");
+      }
+    } else {
+      const newOrder: Order = {
+        id: Date.now(),
+        customerName: orderCustomer.trim(),
+        productName: targetProduct.name,
+        productId: targetProduct.id,
+        quantity: orderQty,
+        totalPrice: finalPrice,
+        status: "completed",
+        date: "Just now",
+      };
+
+      const nextStock = Math.max(0, targetProduct.stock - orderQty);
+      const updatedProducts = products.map((p) =>
+        p.id === targetProduct.id ? { ...p, stock: nextStock } : p
+      );
+
+      updateProductList(updatedProducts);
+      updateOrderList([newOrder, ...orders]);
+      setShowOrderModal(false);
+      setOrderCustomer("");
+      setOrderProductId("");
+      setOrderQty(1);
+      setOrderCalculatedPrice(0);
+      triggerToast(`Order placed for ${orderCustomer.trim()} (${currency}${finalPrice.toLocaleString()})`);
+    }
   };
 
-  const handleDeleteOrder = (id: number | string) => {
-    if (confirm("Delete this order record?")) {
+  const handleDeleteOrder = async (id: number | string) => {
+    if (!confirm("Delete this order record?")) return;
+    const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id");
+
+    if (targetStoreId && targetStoreId !== "default") {
+      try {
+        await api.deleteOrder(targetStoreId, id);
+        const updated = orders.filter((o) => String(o.id) !== String(id));
+        updateOrderList(updated);
+        triggerToast("Order record removed ✅");
+      } catch (err: any) {
+        console.error("Failed to delete order on backend:", err);
+        triggerToast(err.message || "Failed to delete order on backend ❌");
+      }
+    } else {
       const updated = orders.filter((o) => String(o.id) !== String(id));
       updateOrderList(updated);
       triggerToast("Order record removed");
     }
   };
 
-  const toggleOrderStatus = (id: number | string) => {
-    let nextStatus: Order["status"] = "completed";
-    const updated = orders.map((o) => {
-      if (String(o.id) === String(id)) {
-        nextStatus =
-          o.status === "completed" ? "pending" : o.status === "pending" ? "processing" : "completed";
-        return { ...o, status: nextStatus };
+  const toggleOrderStatus = async (id: number | string) => {
+    const targetOrder = orders.find((o) => String(o.id) === String(id));
+    if (!targetOrder) return;
+
+    let nextStatus: "completed" | "pending" | "processing" | "cancelled" = "completed";
+    if (targetOrder.status === "completed") nextStatus = "pending";
+    else if (targetOrder.status === "pending") nextStatus = "processing";
+    else if (targetOrder.status === "processing") nextStatus = "completed";
+    else nextStatus = "pending";
+
+    const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id");
+
+    if (targetStoreId && targetStoreId !== "default") {
+      try {
+        const res = await api.updateOrderStatus(targetStoreId, id, nextStatus);
+        const updatedStatus = res.order?.status || nextStatus;
+        const updated = orders.map((o) =>
+          String(o.id) === String(id) ? { ...o, status: updatedStatus } : o
+        );
+        updateOrderList(updated);
+        triggerToast(`Order status updated to ${updatedStatus} ✅`);
+      } catch (err: any) {
+        console.error("Failed to update order status on backend:", err);
+        triggerToast(err.message || "Failed to update order status on backend ❌");
       }
-      return o;
-    });
-    updateOrderList(updated);
-    triggerToast("Order status updated");
+    } else {
+      const updated = orders.map((o) => {
+        if (String(o.id) === String(id)) {
+          return { ...o, status: nextStatus };
+        }
+        return o;
+      });
+      updateOrderList(updated);
+      triggerToast("Order status updated");
+    }
   };
 
   // Copy Store Link (dynamic localhost/current domain)
