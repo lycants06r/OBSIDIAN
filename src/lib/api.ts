@@ -11,7 +11,15 @@ export const API_BASE_URL =
 export function getStoredToken(): string | null {
   if (typeof window !== "undefined") {
     try {
-      return localStorage.getItem("obsidian_token");
+      const token = localStorage.getItem("obsidian_token");
+      if (token) return token;
+      const raw = localStorage.getItem("obsidian_session");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed?.access_token) return parsed.access_token;
+        if (parsed?.token) return parsed.token;
+      }
+      return null;
     } catch {
       return null;
     }
@@ -174,6 +182,19 @@ export const api = {
       method: "PATCH",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: JSON.stringify(updates),
+    }),
+
+  replaceStore: (storeId: string, storeData: any, token?: string) =>
+    apiRequest<{ message: string; store: any; formattedStore: any }>(`/api/stores/${storeId}`, {
+      method: "PUT",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: JSON.stringify(storeData),
+    }),
+
+  deleteStore: (storeId: string, token?: string) =>
+    apiRequest<{ message?: string; success?: boolean }>(`/api/stores/${storeId}`, {
+      method: "DELETE",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     }),
 
   updateStoreLocation: (

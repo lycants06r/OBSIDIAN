@@ -105,6 +105,7 @@ export default function DashboardPage() {
   const [bannerUrl, setBannerUrl] = useState("");
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   // Form States for Order Modal
   const [orderCustomer, setOrderCustomer] = useState("");
@@ -158,6 +159,7 @@ export default function DashboardPage() {
       let storedShop = "OBSIDIAN Store";
       let storedType = "clothing";
       let storedCurrency = "₹";
+      let storedStoreId = "";
       let initialProducts: Product[] = [];
       let initialOrders: Order[] = [];
 
@@ -173,7 +175,7 @@ export default function DashboardPage() {
         storedType = localStorage.getItem("businessType") || "clothing";
         storedCurrency = localStorage.getItem("storeCurrency") || localStorage.getItem("currency") || "₹";
 
-        const storedStoreId = localStorage.getItem("obsidian_store_id") || "";
+        storedStoreId = localStorage.getItem("obsidian_store_id") || "";
         if (storedStoreId) setBackendStoreId(storedStoreId);
 
         const rawProducts = localStorage.getItem("obsidian_products") || localStorage.getItem("products");
@@ -196,8 +198,44 @@ export default function DashboardPage() {
       // On a new device the backend will identify the user via email header
       // and return THAT USER'S actual data from Supabase — not empty state.
       try {
+        let storeData: any = null;
+
+        // ── Step 2a: Fetch user's stores from GET /api/stores/me ──
+        try {
+          const userStoresRes = await api.getUserStores();
+          const storesList = userStoresRes?.stores || [];
+          if (storesList.length > 0) {
+            const matched = storedStoreId
+              ? storesList.find((s: any) => String(s.id) === String(storedStoreId))
+              : null;
+            storeData = matched || userStoresRes.defaultStore || storesList[0];
+          }
+        } catch {
+          // If /api/stores/me fails, fallback gracefully to account state
+        }
+
+        // ── Step 2b: If store ID is known, fetch detailed store from GET /api/stores/:storeId ──
+        const activeStoreId = storeData?.id || storedStoreId;
+        if (activeStoreId && activeStoreId !== "default") {
+          try {
+            const detailRes = await api.getStore(activeStoreId);
+            if (detailRes?.store || detailRes?.formattedStore) {
+              storeData = { ...storeData, ...(detailRes.store || detailRes.formattedStore) };
+            }
+          } catch {
+            // Keep existing storeData
+          }
+        }
+
+        // ── Step 2c: Fetch account state (for user profile, products, orders, and fallback store) ──
         const state = await api.getAccountState();
         setIsBackendConnected(true);
+
+        if (!storeData && state.store) {
+          storeData = state.store;
+        } else if (storeData && state.store) {
+          storeData = { ...state.store, ...storeData };
+        }
 
         // ── Hydrate user identity ──
         if (state.user) {
@@ -208,59 +246,85 @@ export default function DashboardPage() {
           }
         }
 
-        // ── Hydrate store profile from DB ──
-        if (state.store?.id) {
-          setBackendStoreId(state.store.id);
-          localStorage.setItem("obsidian_store_id", state.store.id);
+        // ── Hydrate store profile from authoritative backend store data ──
+        if (storeData?.id) {
+          setBackendStoreId(storeData.id);
+          localStorage.setItem("obsidian_store_id", storeData.id);
 
-          if (state.store.slug) localStorage.setItem("storeSlug", state.store.slug);
-          if (state.store.live_url) setDeploymentUrl(state.store.live_url);
+          if (storeData.slug) localStorage.setItem("storeSlug", storeData.slug);
+          if (storeData.live_url || storeData.deploymentUrl) {
+            setDeploymentUrl(storeData.live_url || storeData.deploymentUrl);
+          }
 
-          const serverShopName = state.store.name || state.store.shopName;
+          const serverShopName = storeData.name || storeData.shopName;
           if (serverShopName) {
             setShopName(serverShopName);
             localStorage.setItem("shopName", serverShopName);
           }
 
           // Re-check ownerName from store if user didn't have it
-          if (state.store.ownerName) {
-            setOwnerName(state.store.ownerName);
-            localStorage.setItem("ownerName", state.store.ownerName);
+          const serverOwner =
+            storeData.owner_name ||
+            storeData.ownerName ||
+            state.user?.fullName ||
+            state.user?.ownerName;
+          if (serverOwner) {
+            setOwnerName(serverOwner);
+            localStorage.setItem("ownerName", serverOwner);
           }
 
-          if (state.store.businessType) {
-            setBusinessType(state.store.businessType);
-            localStorage.setItem("businessType", state.store.businessType);
+          const serverBusinessType = storeData.business_type || storeData.businessType;
+          if (serverBusinessType) {
+            setBusinessType(serverBusinessType);
+            localStorage.setItem("businessType", serverBusinessType);
           }
 
-          const serverAddress = state.store.address || state.store.shopAddress;
+          const serverCustomType = storeData.custom_business_type || storeData.customBusinessType;
+          if (serverCustomType) {
+            setCustomBusinessType(serverCustomType);
+            localStorage.setItem("customBusinessType", serverCustomType);
+          }
+
+          const serverCustomOptions = storeData.custom_options || storeData.customOptions;
+          if (Array.isArray(serverCustomOptions) && serverCustomOptions.length > 0) {
+            setCustomOptions(serverCustomOptions);
+            localStorage.setItem("customOptions", JSON.stringify(serverCustomOptions));
+          }
+
+          const serverAddress =
+            storeData.address !== undefined ? storeData.address : storeData.shopAddress;
           if (serverAddress !== undefined) {
             setShopAddress(serverAddress || "");
             localStorage.setItem("shopAddress", serverAddress || "");
           }
 
-          if (state.store.addressMethod) {
-            setAddressMethod(state.store.addressMethod);
-            localStorage.setItem("addressMethod", state.store.addressMethod);
+          const serverAddressMethod = storeData.address_method || storeData.addressMethod;
+          if (serverAddressMethod) {
+            setAddressMethod(serverAddressMethod);
+            localStorage.setItem("addressMethod", serverAddressMethod);
           }
 
-          if (state.store.currency) {
-            setCurrency(state.store.currency);
-            localStorage.setItem("storeCurrency", state.store.currency);
-            localStorage.setItem("currency", state.store.currency);
+          const serverCurrency = storeData.currency;
+          if (serverCurrency) {
+            setCurrency(serverCurrency);
+            localStorage.setItem("storeCurrency", serverCurrency);
+            localStorage.setItem("currency", serverCurrency);
           }
 
-          if (state.store.logo_url) {
-            setLogoUrl(state.store.logo_url);
-            localStorage.setItem("storeLogo", state.store.logo_url);
+          if (storeData.logo_url !== undefined) {
+            setLogoUrl(storeData.logo_url || "");
+            if (storeData.logo_url) localStorage.setItem("storeLogo", storeData.logo_url);
+            else localStorage.removeItem("storeLogo");
           }
-          if (state.store.banner_url) {
-            setBannerUrl(state.store.banner_url);
-            localStorage.setItem("storeBanner", state.store.banner_url);
+
+          if (storeData.banner_url !== undefined) {
+            setBannerUrl(storeData.banner_url || "");
+            if (storeData.banner_url) localStorage.setItem("storeBanner", storeData.banner_url);
+            else localStorage.removeItem("storeBanner");
           }
 
           // ── Connect Real-Time SSE for live updates ──
-          unsubscribeSse = api.connectRealtime(state.store.id, (event) => {
+          unsubscribeSse = api.connectRealtime(storeData.id, (event) => {
             if (event.type === "PRODUCT_CREATED" && event.payload?.product) {
               setProducts((prev) => [event.payload.product, ...prev.filter((p) => p.id !== event.payload.product.id)]);
             } else if (event.type === "PRODUCT_UPDATED" && event.payload?.product) {
@@ -476,6 +540,9 @@ export default function DashboardPage() {
       if (res.url) {
         setLogoUrl(res.url);
         localStorage.setItem("storeLogo", res.url);
+        if (storeId && storeId !== "default") {
+          api.updateStore(storeId, { logo_url: res.url }).catch(() => {});
+        }
         triggerToast("Store logo uploaded & saved! ✨");
       }
     } catch (err: any) {
@@ -503,6 +570,9 @@ export default function DashboardPage() {
       if (res.url) {
         setBannerUrl(res.url);
         localStorage.setItem("storeBanner", res.url);
+        if (storeId && storeId !== "default") {
+          api.updateStore(storeId, { banner_url: res.url }).catch(() => {});
+        }
         triggerToast("Store banner uploaded & saved! ✨");
       }
     } catch (err: any) {
@@ -872,39 +942,158 @@ export default function DashboardPage() {
     }
   };
 
-  // Save Settings
-  const saveSettings = (e: React.FormEvent) => {
+  // Save Settings via dedicated Store Management APIs (PATCH /api/stores/:storeId or POST /api/stores)
+  const saveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    const finalBusinessType = (businessType === "other" && customBusinessType.trim())
-      ? customBusinessType.trim()
-      : businessType;
+    const finalBusinessType =
+      businessType === "other" && customBusinessType.trim()
+        ? customBusinessType.trim()
+        : businessType;
 
-    localStorage.setItem("ownerName", ownerName.trim());
-    localStorage.setItem("shopName", shopName.trim());
-    localStorage.setItem("businessType", finalBusinessType);
-    localStorage.setItem("customBusinessType", customBusinessType.trim());
-    localStorage.setItem("customOptions", JSON.stringify(customOptions));
-    localStorage.setItem("addressMethod", addressMethod);
-    localStorage.setItem("shopAddress", shopAddress.trim());
-    localStorage.setItem("storeCurrency", currency);
-    localStorage.setItem("currency", currency);
+    const payload = {
+      name: shopName.trim(),
+      slug: shopName.trim().toLowerCase().replace(/\s+/g, "-"),
+      owner_name: ownerName.trim(),
+      ownerName: ownerName.trim(),
+      business_type: finalBusinessType,
+      businessType: finalBusinessType,
+      custom_business_type: customBusinessType.trim() || undefined,
+      customBusinessType: customBusinessType.trim() || undefined,
+      custom_options: customOptions,
+      customOptions: customOptions,
+      address: shopAddress.trim(),
+      address_method: addressMethod,
+      addressMethod: addressMethod,
+      currency: currency,
+      logo_url: logoUrl || null,
+      banner_url: bannerUrl || null,
+    };
 
-    api.updateAccountState({
-      store: {
-        ownerName: ownerName.trim(),
-        name: shopName.trim(),
-        businessType: finalBusinessType,
-        customBusinessType: customBusinessType.trim(),
-        customOptions,
-        addressMethod,
-        address: shopAddress.trim(),
-        currency,
-        logo_url: logoUrl || null,
-        banner_url: bannerUrl || null,
-      },
-    }).catch(() => {});
+    setIsSavingSettings(true);
+    triggerToast("Saving store profile to backend... ⏳");
 
-    triggerToast("Store profile & configuration saved! ✅");
+    try {
+      let savedStore: any = null;
+      const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id");
+
+      if (targetStoreId && targetStoreId !== "default") {
+        try {
+          const res = await api.updateStore(targetStoreId, payload);
+          savedStore = res?.store || res?.formattedStore;
+        } catch (updateErr: any) {
+          // If store is not found on backend (404), fall back to createStore
+          if (
+            updateErr?.message &&
+            (updateErr.message.includes("404") ||
+              updateErr.message.toLowerCase().includes("not found"))
+          ) {
+            const createRes = await api.createStore(payload);
+            savedStore = createRes?.store || createRes?.formattedStore;
+          } else {
+            throw updateErr;
+          }
+        }
+      } else {
+        const createRes = await api.createStore(payload);
+        savedStore = createRes?.store || createRes?.formattedStore;
+      }
+
+      // Update state authoritatively from backend response
+      if (savedStore) {
+        if (savedStore.id) {
+          setBackendStoreId(savedStore.id);
+          localStorage.setItem("obsidian_store_id", savedStore.id);
+        }
+
+        const updatedName = savedStore.name || savedStore.shopName || shopName.trim();
+        setShopName(updatedName);
+        localStorage.setItem("shopName", updatedName);
+
+        const updatedOwner =
+          savedStore.owner_name || savedStore.ownerName || ownerName.trim();
+        setOwnerName(updatedOwner);
+        localStorage.setItem("ownerName", updatedOwner);
+
+        const updatedType =
+          savedStore.business_type || savedStore.businessType || finalBusinessType;
+        setBusinessType(updatedType);
+        localStorage.setItem("businessType", updatedType);
+
+        if (savedStore.custom_business_type || savedStore.customBusinessType) {
+          const cType =
+            savedStore.custom_business_type || savedStore.customBusinessType;
+          setCustomBusinessType(cType);
+          localStorage.setItem("customBusinessType", cType);
+        }
+
+        if (savedStore.custom_options || savedStore.customOptions) {
+          const cOpts = savedStore.custom_options || savedStore.customOptions;
+          if (Array.isArray(cOpts)) {
+            setCustomOptions(cOpts);
+            localStorage.setItem("customOptions", JSON.stringify(cOpts));
+          }
+        }
+
+        const updatedAddress =
+          savedStore.address !== undefined
+            ? savedStore.address
+            : savedStore.shopAddress !== undefined
+            ? savedStore.shopAddress
+            : shopAddress.trim();
+        setShopAddress(updatedAddress || "");
+        localStorage.setItem("shopAddress", updatedAddress || "");
+
+        if (savedStore.address_method || savedStore.addressMethod) {
+          const addrMeth = savedStore.address_method || savedStore.addressMethod;
+          setAddressMethod(addrMeth);
+          localStorage.setItem("addressMethod", addrMeth);
+        }
+
+        if (savedStore.currency) {
+          setCurrency(savedStore.currency);
+          localStorage.setItem("storeCurrency", savedStore.currency);
+          localStorage.setItem("currency", savedStore.currency);
+        }
+
+        if (savedStore.logo_url !== undefined) {
+          setLogoUrl(savedStore.logo_url || "");
+          if (savedStore.logo_url) localStorage.setItem("storeLogo", savedStore.logo_url);
+          else localStorage.removeItem("storeLogo");
+        }
+
+        if (savedStore.banner_url !== undefined) {
+          setBannerUrl(savedStore.banner_url || "");
+          if (savedStore.banner_url) localStorage.setItem("storeBanner", savedStore.banner_url);
+          else localStorage.removeItem("storeBanner");
+        }
+
+        if (savedStore.slug) {
+          localStorage.setItem("storeSlug", savedStore.slug);
+        }
+      } else {
+        localStorage.setItem("ownerName", ownerName.trim());
+        localStorage.setItem("shopName", shopName.trim());
+        localStorage.setItem("businessType", finalBusinessType);
+        localStorage.setItem("customBusinessType", customBusinessType.trim());
+        localStorage.setItem("customOptions", JSON.stringify(customOptions));
+        localStorage.setItem("addressMethod", addressMethod);
+        localStorage.setItem("shopAddress", shopAddress.trim());
+        localStorage.setItem("storeCurrency", currency);
+        localStorage.setItem("currency", currency);
+      }
+
+      // Also sync unified state in background
+      api.updateAccountState({
+        store: payload,
+      }).catch(() => {});
+
+      triggerToast("Store profile & configuration saved to backend! ✅");
+    } catch (err: any) {
+      console.error("Save store settings error:", err);
+      triggerToast(err.message || "Failed to save store settings to backend ❌");
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
   // Filtered Products
@@ -2243,6 +2432,10 @@ export default function DashboardPage() {
                           onClick={() => {
                             setLogoUrl("");
                             localStorage.removeItem("storeLogo");
+                            const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id");
+                            if (targetStoreId && targetStoreId !== "default") {
+                              api.updateStore(targetStoreId, { logo_url: null }).catch(() => {});
+                            }
                           }}
                           style={{ background: "none", border: "none", color: "#ef4444", fontSize: "0.72rem", cursor: "pointer", fontWeight: 600 }}
                         >
@@ -2290,6 +2483,10 @@ export default function DashboardPage() {
                           onClick={() => {
                             setBannerUrl("");
                             localStorage.removeItem("storeBanner");
+                            const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id");
+                            if (targetStoreId && targetStoreId !== "default") {
+                              api.updateStore(targetStoreId, { banner_url: null }).catch(() => {});
+                            }
                           }}
                           style={{ background: "none", border: "none", color: "#ef4444", fontSize: "0.72rem", cursor: "pointer", fontWeight: 600 }}
                         >
@@ -2331,8 +2528,13 @@ export default function DashboardPage() {
 
               {/* Action Buttons */}
               <div style={{ marginTop: 24, display: "flex", gap: 12, alignItems: "center" }}>
-                <button type="submit" className="db-btn db-btn-primary" data-cursor="link">
-                  💾 Save Store Profile & Configuration
+                <button
+                  type="submit"
+                  className="db-btn db-btn-primary"
+                  data-cursor="link"
+                  disabled={isSavingSettings}
+                >
+                  {isSavingSettings ? "⏳ Saving..." : "💾 Save Store Profile & Configuration"}
                 </button>
                 <button type="button" onClick={clearAllData} className="db-btn db-btn-danger" data-cursor="link">
                   🗑️ Clear Store Data
