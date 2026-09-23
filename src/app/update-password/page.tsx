@@ -62,12 +62,8 @@ export default function UpdatePasswordPage() {
     setErrorMessage(null);
 
     try {
-      try {
-        await api.updatePassword({ password: newPassword });
-      } catch (apiErr: any) {
-        console.warn("Backend update password note:", apiErr.message);
-      }
-      localStorage.setItem("obsidian_user_password", newPassword);
+      await api.updatePassword({ password: newPassword });
+
       const stored = localStorage.getItem("obsidian_session");
       if (stored) {
         try {
