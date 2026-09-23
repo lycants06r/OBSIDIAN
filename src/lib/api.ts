@@ -218,11 +218,14 @@ export const api = {
     ),
 
   selectTemplate: (storeId: string, templateId: string, token?: string) =>
-    apiRequest(`/api/stores/${storeId}/select-template`, {
-      method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: JSON.stringify({ templateId }),
-    }),
+    apiRequest<{ message?: string; store?: any; formattedStore?: any; template?: any }>(
+      `/api/stores/${storeId}/select-template`,
+      {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: JSON.stringify({ templateId }),
+      }
+    ),
 
   uploadAsset: (storeId: string, file: File | Blob, category: "logo" | "banner" | "product" = "product") => {
     const formData = new FormData();

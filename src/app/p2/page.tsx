@@ -9,7 +9,7 @@ import "./dashboard.css";
 
 
 interface Product {
-  id: number;
+  id: number | string;
   name: string;
   price: number;
   sellingPrice?: number;
@@ -31,15 +31,99 @@ const SAMPLE_CATALOG_TEMPLATES: Product[] = [];
 const SAMPLE_ORDER_TEMPLATES: Order[] = [];
 
 interface Order {
-  id: number;
+  id: number | string;
   customerName: string;
   productName: string;
-  productId: number;
+  productId: number | string;
   quantity: number;
   totalPrice: number;
   status: "completed" | "pending" | "processing";
   date: string;
 }
+
+export interface StoreTemplate {
+  id: string;
+  name: string;
+  description: string;
+  thumbnail_url?: string;
+  category?: string;
+  theme?: {
+    fontFamily?: string;
+    primaryColor?: string;
+    accentColor?: string;
+    backgroundColor?: string;
+    cardBackground?: string;
+    textColor?: string;
+    radius?: string;
+  };
+}
+
+export const DEFAULT_STORE_TEMPLATES: StoreTemplate[] = [
+  {
+    id: "obsidian-classic",
+    name: "Obsidian Classic",
+    description: "High-contrast obsidian dark aesthetic designed for modern commerce and electronics.",
+    thumbnail_url: "https://assets.obsidian.store/templates/classic-preview.webp",
+    category: "Modern Dark",
+    theme: {
+      fontFamily: "'Inter', sans-serif",
+      primaryColor: "#0f172a",
+      accentColor: "#38bdf8",
+      backgroundColor: "#020617",
+      cardBackground: "#0f172a",
+      textColor: "#f8fafc",
+      radius: "0.5rem"
+    }
+  },
+  {
+    id: "obsidian-minimal",
+    name: "Obsidian Minimal",
+    description: "Monochrome, ultra-clean aesthetic with generous whitespace, perfect for curated apparel.",
+    thumbnail_url: "https://assets.obsidian.store/templates/minimal-preview.webp",
+    category: "Minimalist",
+    theme: {
+      fontFamily: "'Plus Jakarta Sans', sans-serif",
+      primaryColor: "#18181b",
+      accentColor: "#10b981",
+      backgroundColor: "#ffffff",
+      cardBackground: "#f4f4f5",
+      textColor: "#09090b",
+      radius: "0.25rem"
+    }
+  },
+  {
+    id: "obsidian-luxury",
+    name: "Obsidian Luxury",
+    description: "Opulent gold-accented palette crafted for premium jewelry, fragrances, and luxury goods.",
+    thumbnail_url: "https://assets.obsidian.store/templates/luxury-preview.webp",
+    category: "Luxury",
+    theme: {
+      fontFamily: "'Cinzel', 'Playfair Display', serif",
+      primaryColor: "#1c1917",
+      accentColor: "#fbbf24",
+      backgroundColor: "#0c0a09",
+      cardBackground: "#1c1917",
+      textColor: "#fafaf9",
+      radius: "0.125rem"
+    }
+  },
+  {
+    id: "obsidian-editorial",
+    name: "Obsidian Editorial",
+    description: "Bold typography, expressive borders, and editorial layouts for artisan boutiques.",
+    thumbnail_url: "https://assets.obsidian.store/templates/editorial-preview.webp",
+    category: "Editorial",
+    theme: {
+      fontFamily: "'Syne', sans-serif",
+      primaryColor: "#27272a",
+      accentColor: "#ec4899",
+      backgroundColor: "#18181b",
+      cardBackground: "#27272a",
+      textColor: "#fafafa",
+      radius: "0.75rem"
+    }
+  }
+];
 
 
 export default function DashboardPage() {
@@ -63,6 +147,11 @@ export default function DashboardPage() {
   const [mapsUrl, setMapsUrl] = useState<string>("");
   const [currency, setCurrency] = useState("₹");
 
+  // Storefront Template States (Point #3: POST /api/stores/:storeId/select-template)
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("obsidian-classic");
+  const [availableTemplates, setAvailableTemplates] = useState<StoreTemplate[]>(DEFAULT_STORE_TEMPLATES);
+  const [isSelectingTemplate, setIsSelectingTemplate] = useState<boolean>(false);
+
   // Catalog & Orders (Clean by default - all default examples removed)
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -80,8 +169,8 @@ export default function DashboardPage() {
   // Sample Chooser States (Manual selection)
   const [showSampleChooserModal, setShowSampleChooserModal] = useState(false);
   const [showSampleOrderModal, setShowSampleOrderModal] = useState(false);
-  const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([]);
-  const [selectedOrderTemplateIds, setSelectedOrderTemplateIds] = useState<number[]>([]);
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<(number | string)[]>([]);
+  const [selectedOrderTemplateIds, setSelectedOrderTemplateIds] = useState<(number | string)[]>([]);
   const [sampleCategoryFilter, setSampleCategoryFilter] = useState("all");
 
   // Form States for Product Modal
@@ -113,7 +202,7 @@ export default function DashboardPage() {
 
   // Form States for Order Modal
   const [orderCustomer, setOrderCustomer] = useState("");
-  const [orderProductId, setOrderProductId] = useState<number | "">("");
+  const [orderProductId, setOrderProductId] = useState<number | string | "">("");
   const [orderQty, setOrderQty] = useState(1);
   const [orderCalculatedPrice, setOrderCalculatedPrice] = useState(0);
 
@@ -203,6 +292,16 @@ export default function DashboardPage() {
       // and return THAT USER'S actual data from Supabase — not empty state.
       try {
         let storeData: any = null;
+
+        // ── Fetch available templates from GET /api/templates ──
+        try {
+          const tplRes = await api.getTemplates();
+          if (Array.isArray(tplRes?.templates) && tplRes.templates.length > 0) {
+            setAvailableTemplates(tplRes.templates);
+          }
+        } catch {
+          // Keep DEFAULT_STORE_TEMPLATES
+        }
 
         // ── Step 2a: Fetch user's stores from GET /api/stores/me ──
         try {
@@ -358,6 +457,17 @@ export default function DashboardPage() {
             else localStorage.removeItem("storeBanner");
           }
 
+          // ── Hydrate selected storefront template from backend ──
+          const serverTemplateId =
+            storeData.selected_template_id ||
+            storeData.selectedTemplateId ||
+            storeData.template_id ||
+            storeData.templateId;
+          if (serverTemplateId) {
+            setSelectedTemplateId(serverTemplateId);
+            localStorage.setItem("obsidian_selected_template_id", serverTemplateId);
+          }
+
           // ── Connect Real-Time SSE for live updates ──
           unsubscribeSse = api.connectRealtime(storeData.id, (event) => {
             if (event.type === "PRODUCT_CREATED" && event.payload?.product) {
@@ -378,12 +488,28 @@ export default function DashboardPage() {
           });
         }
 
-        // ── Hydrate products from DB (authoritative) ──
-        if (Array.isArray(state.products) && state.products.length > 0) {
+        // ── Hydrate products from DB (authoritative) via GET /api/stores/:storeId/products ──
+        let serverProducts: Product[] = [];
+        if (activeStoreId && activeStoreId !== "default") {
+          try {
+            const prodRes = await api.getProducts(activeStoreId);
+            if (Array.isArray(prodRes?.products) && prodRes.products.length > 0) {
+              serverProducts = prodRes.products;
+            }
+          } catch {
+            // Fall back to state.products
+          }
+        }
+
+        if (serverProducts.length === 0 && Array.isArray(state.products) && state.products.length > 0) {
+          serverProducts = state.products;
+        }
+
+        if (serverProducts.length > 0) {
           // Backend has data — use it regardless of what localStorage says
-          setProducts(state.products);
-          localStorage.setItem("obsidian_products", JSON.stringify(state.products));
-          localStorage.setItem("products", JSON.stringify(state.products));
+          setProducts(serverProducts);
+          localStorage.setItem("obsidian_products", JSON.stringify(serverProducts));
+          localStorage.setItem("products", JSON.stringify(serverProducts));
         } else if (initialProducts.length > 0 || initialOrders.length > 0) {
           // Backend has no data for this user yet — import localStorage data into DB
           // (This handles first login after migrating from offline mode)
@@ -450,6 +576,9 @@ export default function DashboardPage() {
         if (storedPlaceId) setPlaceId(storedPlaceId);
         const storedMapsUrl = localStorage.getItem("storeMapsUrl") || "";
         if (storedMapsUrl) setMapsUrl(storedMapsUrl);
+
+        const storedTemplateId = localStorage.getItem("obsidian_selected_template_id");
+        if (storedTemplateId) setSelectedTemplateId(storedTemplateId);
 
         setShopName(storedShop);
         setBusinessType(storedType);
@@ -637,16 +766,29 @@ export default function DashboardPage() {
   const lowStockProducts = products.filter((p) => p.stock <= 5);
   const lowStockCount = lowStockProducts.length;
 
-  const handleQuickRestock = (productId: number, productName: string) => {
-    const updated = products.map((p) =>
-      p.id === productId ? { ...p, stock: p.stock + 10 } : p
-    );
-    updateProductList(updated);
-    triggerToast(`Restocked "${productName}" (+10 units added)! 📦`);
+  const handleQuickRestock = async (productId: number | string, productName: string) => {
+    const target = products.find((p) => String(p.id) === String(productId));
+    if (!target) return;
+    const nextStock = target.stock + 10;
+    const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id");
+
+    try {
+      if (targetStoreId && targetStoreId !== "default") {
+        await api.adjustStock(targetStoreId, productId, { delta: 10, stock: nextStock });
+      }
+      const updated = products.map((p) =>
+        String(p.id) === String(productId) ? { ...p, stock: nextStock } : p
+      );
+      updateProductList(updated);
+      triggerToast(`Restocked "${productName}" (+10 units added)! 📦`);
+    } catch (err: any) {
+      console.error("Restock error:", err);
+      triggerToast(err.message || "Failed to restock product on backend ❌");
+    }
   };
 
   // Manual Template Selection Handlers ("choose manually then show it")
-  const toggleTemplateSelection = (id: number) => {
+  const toggleTemplateSelection = (id: number | string) => {
     setSelectedTemplateIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
@@ -691,7 +833,7 @@ export default function DashboardPage() {
     triggerToast(`Added "${template.name}" to store catalog! ✨`);
   };
 
-  const toggleOrderTemplateSelection = (id: number) => {
+  const toggleOrderTemplateSelection = (id: number | string) => {
     setSelectedOrderTemplateIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
@@ -720,10 +862,19 @@ export default function DashboardPage() {
     triggerToast(`Added ${newOrders.length} chosen orders to dashboard! 📋`);
   };
 
-  const handleClearAllProducts = () => {
+  const handleClearAllProducts = async () => {
     if (confirm("Remove all products from your dashboard? You can choose or add them manually anytime.")) {
-      updateProductList([]);
-      triggerToast("All products removed.");
+      const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id");
+      try {
+        if (targetStoreId && targetStoreId !== "default") {
+          await api.clearProducts(targetStoreId);
+        }
+        updateProductList([]);
+        triggerToast("All products removed.");
+      } catch (err: any) {
+        console.error("Clear products error:", err);
+        triggerToast(err.message || "Failed to clear products on backend ❌");
+      }
     }
   };
 
@@ -784,8 +935,8 @@ export default function DashboardPage() {
     setFormImage("");
   };
 
-  // Add or Edit Product Submit
-  const handleProductSubmit = (e: React.FormEvent) => {
+  // Add or Edit Product Submit (POST /api/stores/:storeId/products or PUT /api/stores/:storeId/products/:productId)
+  const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
       triggerToast("Product Name is required");
@@ -818,8 +969,7 @@ export default function DashboardPage() {
 
     const calculatedDiscount = Math.round(((mrpNum - sellingNum) / mrpNum) * 100);
 
-    const productData: Product = {
-      id: editingProduct ? editingProduct.id : Date.now(),
+    const productPayload: any = {
       name: formName.trim(),
       image: formImage.trim() || undefined,
       brand: formBrand.trim() || undefined,
@@ -829,26 +979,50 @@ export default function DashboardPage() {
       sellingPrice: sellingNum,
       discountPercent: calculatedDiscount,
       stock: stockNum,
-
-      // Compatibility fields
       price: sellingNum,
+      discountPrice: calculatedDiscount > 0 ? sellingNum : undefined,
       emoji: editingProduct?.emoji || "📦",
       category: formBrand.trim() || formCategory || "General",
-      status: "active",
+      status: editingProduct?.status || "active",
     };
 
-    if (editingProduct) {
-      const updated = products.map((p) => (p.id === editingProduct.id ? productData : p));
-      updateProductList(updated);
-      triggerToast(`Updated "${productData.name}"!`);
-    } else {
-      updateProductList([productData, ...products]);
-      triggerToast(`Added "${productData.name}" to catalog!`);
-    }
+    const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id");
 
-    setShowProductModal(false);
-    setEditingProduct(null);
-    resetProductForm();
+    try {
+      if (editingProduct) {
+        let updatedProd: Product = { ...editingProduct, ...productPayload };
+        if (targetStoreId && targetStoreId !== "default") {
+          const res = await api.updateProduct(targetStoreId, editingProduct.id, productPayload);
+          if (res?.product || res?.rawProduct) {
+            updatedProd = { ...updatedProd, ...(res.product || res.rawProduct) };
+          }
+        }
+        const updated = products.map((p) => (String(p.id) === String(editingProduct.id) ? updatedProd : p));
+        updateProductList(updated);
+        triggerToast(`Updated "${productPayload.name}"! ✨`);
+      } else {
+        let createdProd: Product = {
+          ...productPayload,
+          id: Date.now(),
+        };
+        if (targetStoreId && targetStoreId !== "default") {
+          const res = await api.createProduct(targetStoreId, productPayload);
+          if (res?.product || res?.rawProduct) {
+            createdProd = { ...createdProd, ...(res.product || res.rawProduct) };
+          }
+        }
+        const updated = [createdProd, ...products];
+        updateProductList(updated);
+        triggerToast(`Added "${productPayload.name}" to catalog! ✨`);
+      }
+
+      setShowProductModal(false);
+      setEditingProduct(null);
+      resetProductForm();
+    } catch (err: any) {
+      console.error("Product save error:", err);
+      triggerToast(err.message || "Failed to save product to backend ❌");
+    }
   };
 
   const openAddProductModal = () => {
@@ -875,24 +1049,45 @@ export default function DashboardPage() {
     setShowProductModal(true);
   };
 
-  const handleDeleteProduct = (id: number, name: string) => {
+  const handleDeleteProduct = async (id: number | string, name: string) => {
     if (confirm(`Remove "${name}" from store catalog?`)) {
-      const updated = products.filter((p) => p.id !== id);
-      updateProductList(updated);
-      triggerToast(`Deleted "${name}"`);
+      const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id");
+      try {
+        if (targetStoreId && targetStoreId !== "default") {
+          await api.deleteProduct(targetStoreId, id);
+        }
+        const updated = products.filter((p) => String(p.id) !== String(id));
+        updateProductList(updated);
+        triggerToast(`Deleted "${name}"`);
+      } catch (err: any) {
+        console.error("Delete product error:", err);
+        triggerToast(err.message || `Failed to delete "${name}" from backend ❌`);
+      }
     }
   };
 
-  // Adjust stock inline (+1 or -1)
-  const adjustStock = (id: number, amount: number) => {
-    const updated = products.map((p) => {
-      if (p.id === id) {
-        const nextStock = Math.max(0, p.stock + amount);
-        return { ...p, stock: nextStock };
+  // Adjust stock inline (+1 or -1) via PATCH /api/stores/:storeId/products/:productId/stock
+  const adjustStock = async (id: number | string, amount: number) => {
+    const target = products.find((p) => String(p.id) === String(id));
+    if (!target) return;
+    const nextStock = Math.max(0, target.stock + amount);
+
+    const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id");
+    try {
+      if (targetStoreId && targetStoreId !== "default") {
+        await api.adjustStock(targetStoreId, id, { delta: amount, stock: nextStock });
       }
-      return p;
-    });
-    updateProductList(updated);
+      const updated = products.map((p) => {
+        if (String(p.id) === String(id)) {
+          return { ...p, stock: nextStock };
+        }
+        return p;
+      });
+      updateProductList(updated);
+    } catch (err: any) {
+      console.error("Adjust stock error:", err);
+      triggerToast(err.message || "Failed to update stock on backend ❌");
+    }
   };
 
   // Order Submission
@@ -903,7 +1098,7 @@ export default function DashboardPage() {
       return;
     }
 
-    const targetProduct = products.find((p) => p.id === Number(orderProductId));
+    const targetProduct = products.find((p) => String(p.id) === String(orderProductId));
     if (!targetProduct) {
       triggerToast("Selected product not found");
       return;
@@ -942,18 +1137,18 @@ export default function DashboardPage() {
     triggerToast(`Order placed for ${orderCustomer.trim()} (${currency}${finalPrice.toLocaleString()})`);
   };
 
-  const handleDeleteOrder = (id: number) => {
+  const handleDeleteOrder = (id: number | string) => {
     if (confirm("Delete this order record?")) {
-      const updated = orders.filter((o) => o.id !== id);
+      const updated = orders.filter((o) => String(o.id) !== String(id));
       updateOrderList(updated);
       triggerToast("Order record removed");
     }
   };
 
-  const toggleOrderStatus = (id: number) => {
+  const toggleOrderStatus = (id: number | string) => {
     let nextStatus: Order["status"] = "completed";
     const updated = orders.map((o) => {
-      if (o.id === id) {
+      if (String(o.id) === String(id)) {
         nextStatus =
           o.status === "completed" ? "pending" : o.status === "pending" ? "processing" : "completed";
         return { ...o, status: nextStatus };
@@ -1000,6 +1195,41 @@ export default function DashboardPage() {
     return null;
   };
 
+  // ── Point #3: Select Storefront Template via POST /api/stores/:storeId/select-template ──
+  const handleSelectTemplate = async (templateId: string) => {
+    const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id");
+    
+    if (!targetStoreId || targetStoreId === "default") {
+      setSelectedTemplateId(templateId);
+      localStorage.setItem("obsidian_selected_template_id", templateId);
+      const tName = availableTemplates.find((t) => t.id === templateId)?.name || templateId;
+      triggerToast(`Template "${tName}" selected! (Will bind when store is saved) 🎨`);
+      return;
+    }
+
+    setIsSelectingTemplate(true);
+    triggerToast("Applying template to store... 🎨");
+
+    try {
+      const res = await api.selectTemplate(targetStoreId, templateId);
+      
+      // Update state authoritatively from backend response
+      setSelectedTemplateId(templateId);
+      localStorage.setItem("obsidian_selected_template_id", templateId);
+
+      if (res?.store?.selected_template_id) {
+        setSelectedTemplateId(res.store.selected_template_id);
+      }
+      const tObj = availableTemplates.find((t) => t.id === templateId);
+      triggerToast(`Storefront template updated to "${tObj?.name || templateId}"! 🎨`);
+    } catch (err: any) {
+      console.error("Failed to select template on backend:", err);
+      triggerToast(err.message || "Failed to select template on backend (POST /api/stores/:id/select-template) ❌");
+    } finally {
+      setIsSelectingTemplate(false);
+    }
+  };
+
   // Save Settings via dedicated Store Management APIs (PATCH /api/stores/:storeId or POST /api/stores)
   const saveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1025,6 +1255,7 @@ export default function DashboardPage() {
       currency: currency,
       logo_url: logoUrl || null,
       banner_url: bannerUrl || null,
+      selected_template_id: selectedTemplateId || undefined,
     };
 
     setIsSavingSettings(true);
@@ -1125,6 +1356,12 @@ export default function DashboardPage() {
           else localStorage.removeItem("storeBanner");
         }
 
+        if (savedStore.selected_template_id || savedStore.selectedTemplateId) {
+          const tId = savedStore.selected_template_id || savedStore.selectedTemplateId;
+          setSelectedTemplateId(tId);
+          localStorage.setItem("obsidian_selected_template_id", tId);
+        }
+
         if (savedStore.slug) {
           localStorage.setItem("storeSlug", savedStore.slug);
         }
@@ -1138,6 +1375,9 @@ export default function DashboardPage() {
         localStorage.setItem("shopAddress", shopAddress.trim());
         localStorage.setItem("storeCurrency", currency);
         localStorage.setItem("currency", currency);
+        if (selectedTemplateId) {
+          localStorage.setItem("obsidian_selected_template_id", selectedTemplateId);
+        }
       }
 
       // Also sync unified state in background
@@ -1225,6 +1465,19 @@ export default function DashboardPage() {
         } catch (locErr: any) {
           console.error("Failed to update store location on backend:", locErr);
           throw new Error(locErr.message || "Failed to update store location on backend (PATCH /api/stores/:id/location)");
+        }
+      }
+
+      // ── Point #3: Sync Storefront Template via POST /api/stores/:storeId/select-template ──
+      if (effectiveStoreId && effectiveStoreId !== "default" && selectedTemplateId) {
+        try {
+          const tplRes = await api.selectTemplate(effectiveStoreId, selectedTemplateId);
+          if (tplRes?.store?.selected_template_id) {
+            setSelectedTemplateId(tplRes.store.selected_template_id);
+          }
+          localStorage.setItem("obsidian_selected_template_id", selectedTemplateId);
+        } catch (tplErr: any) {
+          console.warn("Template selection sync warning:", tplErr);
         }
       }
 
@@ -2667,6 +2920,132 @@ export default function DashboardPage() {
                 </div>
               </div>
 
+              {/* Storefront Design & Architecture Template Selection */}
+              <div
+                style={{
+                  marginTop: "20px",
+                  padding: "20px",
+                  borderRadius: "var(--nm-radius-lg)",
+                  background: "var(--nm-bg)",
+                  boxShadow: "var(--nm-shadow-in)",
+                  border: "1px solid rgba(255, 255, 255, 0.7)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: 8 }}>
+                  <h4
+                    style={{
+                      fontSize: "0.88rem",
+                      fontWeight: 700,
+                      color: "var(--nm-text-dark)",
+                      margin: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                    }}
+                  >
+                    <span>🎨</span> Storefront Architectural Templates
+                  </h4>
+                  <span style={{ fontSize: "0.74rem", color: "var(--nm-text-light)" }}>
+                    Select theme for public storefront (/p3.html)
+                  </span>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: "14px",
+                  }}
+                >
+                  {availableTemplates.map((tpl) => {
+                    const isSelected = selectedTemplateId === tpl.id;
+                    return (
+                      <div
+                        key={tpl.id}
+                        style={{
+                          padding: "16px",
+                          borderRadius: "14px",
+                          background: isSelected ? "rgba(124, 58, 237, 0.06)" : "var(--nm-bg)",
+                          border: isSelected ? "2px solid #7c3aed" : "1px solid var(--nm-border-inner)",
+                          boxShadow: isSelected ? "0 0 0 1px #7c3aed, var(--nm-shadow-out)" : "var(--nm-shadow-out)",
+                          display: "flex",
+                          flexDirection: "column",
+                          justifyContent: "space-between",
+                          transition: "all 0.2s ease",
+                          position: "relative",
+                        }}
+                      >
+                        {isSelected && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: "10px",
+                              right: "10px",
+                              background: "#7c3aed",
+                              color: "#ffffff",
+                              fontSize: "0.65rem",
+                              fontWeight: 800,
+                              padding: "2px 8px",
+                              borderRadius: "12px",
+                              letterSpacing: "0.04em",
+                              textTransform: "uppercase",
+                            }}
+                          >
+                            ✓ Active
+                          </div>
+                        )}
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+                            <span style={{ fontSize: "1.2rem" }}>
+                              {tpl.id === "obsidian-classic" ? "🌌" : tpl.id === "obsidian-minimal" ? "✨" : tpl.id === "obsidian-luxury" ? "👑" : "📰"}
+                            </span>
+                            <div style={{ fontWeight: 800, fontSize: "0.88rem", color: "var(--nm-text-dark)" }}>
+                              {tpl.name}
+                            </div>
+                          </div>
+                          <div style={{ fontSize: "0.7rem", color: "#7c3aed", fontWeight: 700, marginBottom: "6px" }}>
+                            {tpl.category || "Storefront Theme"}
+                          </div>
+                          <p style={{ fontSize: "0.74rem", color: "var(--nm-text-light)", margin: "0 0 14px", lineHeight: 1.4 }}>
+                            {tpl.description}
+                          </p>
+                        </div>
+
+                        <div style={{ display: "flex", gap: "8px", marginTop: "auto" }}>
+                          <button
+                            type="button"
+                            onClick={() => handleSelectTemplate(tpl.id)}
+                            disabled={isSelectingTemplate}
+                            className={isSelected ? "db-btn db-btn-primary" : "db-btn db-btn-secondary"}
+                            style={{
+                              flex: 1,
+                              fontSize: "0.74rem",
+                              padding: "8px 10px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              gap: "4px",
+                              cursor: isSelectingTemplate ? "wait" : "pointer",
+                            }}
+                          >
+                            {isSelected ? "✓ Applied" : "Select Template"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowStorePreview(true)}
+                            className="db-btn db-btn-secondary"
+                            style={{ fontSize: "0.74rem", padding: "8px 10px" }}
+                            title="Preview Storefront"
+                          >
+                            👁️
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* Action Buttons */}
               <div style={{ marginTop: 24, display: "flex", gap: 12, alignItems: "center" }}>
                 <button
@@ -2745,6 +3124,55 @@ export default function DashboardPage() {
                 >
                   📷 QR Code
                 </button>
+              </div>
+            </div>
+
+            {/* Storefront Template Card in Deployment Tab */}
+            <div className="stitch-glass-panel stitch-side-card" style={{ marginTop: "16px" }} data-purpose="template-selection-card">
+              <div className="stitch-card-header">
+                <div className="stitch-card-title-wrap">
+                  <span className="stitch-icon-badge" style={{ background: "rgba(124, 58, 237, 0.1)", color: "#7c3aed", width: 24, height: 24 }}>
+                    🎨
+                  </span>
+                  <h3 className="stitch-card-title">Storefront Architecture Theme</h3>
+                </div>
+                <span className="stitch-live-pill" style={{ background: "rgba(124, 58, 237, 0.12)", color: "#7c3aed" }}>
+                  {availableTemplates.find((t) => t.id === selectedTemplateId)?.name || selectedTemplateId}
+                </span>
+              </div>
+
+              <p style={{ fontSize: "0.78rem", color: "var(--nm-text-muted)", margin: "0 0 12px" }}>
+                Switch or bind a live storefront architectural template deployed on Vercel & Supabase.
+              </p>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10 }}>
+                {availableTemplates.map((tpl) => {
+                  const isSelected = selectedTemplateId === tpl.id;
+                  return (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      onClick={() => handleSelectTemplate(tpl.id)}
+                      disabled={isSelectingTemplate}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        background: isSelected ? "rgba(124, 58, 237, 0.08)" : "var(--nm-bg)",
+                        border: isSelected ? "2px solid #7c3aed" : "1px solid var(--nm-border-inner)",
+                        textAlign: "left",
+                        cursor: isSelectingTemplate ? "wait" : "pointer",
+                        boxShadow: isSelected ? "0 0 0 1px #7c3aed" : "var(--nm-shadow-out)",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--nm-text-dark)", display: "flex", justifyContent: "space-between" }}>
+                        <span>{tpl.name}</span>
+                        {isSelected && <span style={{ color: "#7c3aed", fontWeight: 800 }}>✓</span>}
+                      </div>
+                      <div style={{ fontSize: "0.68rem", color: "#7c3aed", marginTop: 2 }}>{tpl.category}</div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -3042,9 +3470,9 @@ export default function DashboardPage() {
                 <select
                   value={orderProductId}
                   onChange={(e) => {
-                    const pid = Number(e.target.value);
+                    const pid = e.target.value;
                     setOrderProductId(pid);
-                    const prod = products.find((p) => p.id === pid);
+                    const prod = products.find((p) => String(p.id) === String(pid));
                     if (prod) setOrderCalculatedPrice(prod.price * orderQty);
                   }}
                   className="db-form-select"
@@ -3069,7 +3497,7 @@ export default function DashboardPage() {
                     onChange={(e) => {
                       const qty = Math.max(1, parseInt(e.target.value) || 1);
                       setOrderQty(qty);
-                      const prod = products.find((p) => p.id === Number(orderProductId));
+                      const prod = products.find((p) => String(p.id) === String(orderProductId));
                       if (prod) setOrderCalculatedPrice(prod.price * qty);
                     }}
                     className="db-form-input"
