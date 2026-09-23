@@ -208,11 +208,14 @@ export const api = {
     },
     token?: string
   ) =>
-    apiRequest(`/api/stores/${storeId}/location`, {
-      method: "PATCH",
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: JSON.stringify(locationData),
-    }),
+    apiRequest<{ message?: string; store?: any; formattedStore?: any; location?: any }>(
+      `/api/stores/${storeId}/location`,
+      {
+        method: "PATCH",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: JSON.stringify(locationData),
+      }
+    ),
 
   selectTemplate: (storeId: string, templateId: string, token?: string) =>
     apiRequest(`/api/stores/${storeId}/select-template`, {

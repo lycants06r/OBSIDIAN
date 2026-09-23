@@ -57,6 +57,10 @@ export default function DashboardPage() {
   const [isManualType, setIsManualType] = useState(false);
   const [addressMethod, setAddressMethod] = useState<"manual" | "map">("manual");
   const [shopAddress, setShopAddress] = useState("");
+  const [latitude, setLatitude] = useState<number | null>(null);
+  const [longitude, setLongitude] = useState<number | null>(null);
+  const [placeId, setPlaceId] = useState<string>("");
+  const [mapsUrl, setMapsUrl] = useState<string>("");
   const [currency, setCurrency] = useState("₹");
 
   // Catalog & Orders (Clean by default - all default examples removed)
@@ -304,6 +308,37 @@ export default function DashboardPage() {
             localStorage.setItem("addressMethod", serverAddressMethod);
           }
 
+          // ── Hydrate Store Location attributes from backend ──
+          if (storeData.latitude !== undefined && storeData.latitude !== null) {
+            setLatitude(Number(storeData.latitude));
+            localStorage.setItem("storeLatitude", String(storeData.latitude));
+          }
+          if (storeData.longitude !== undefined && storeData.longitude !== null) {
+            setLongitude(Number(storeData.longitude));
+            localStorage.setItem("storeLongitude", String(storeData.longitude));
+          }
+          if (storeData.place_id || storeData.placeId) {
+            const pId = storeData.place_id || storeData.placeId;
+            setPlaceId(pId);
+            localStorage.setItem("storePlaceId", pId);
+          }
+          if (storeData.maps_url || storeData.mapsUrl) {
+            const mUrl = storeData.maps_url || storeData.mapsUrl;
+            setMapsUrl(mUrl);
+            localStorage.setItem("storeMapsUrl", mUrl);
+          }
+
+          // If address was empty but formatted_address exists, populate it
+          if (!serverAddress && (storeData.formatted_address || storeData.formattedAddress)) {
+            const fAddr = storeData.formatted_address || storeData.formattedAddress;
+            setShopAddress(fAddr);
+            localStorage.setItem("shopAddress", fAddr);
+          } else if (!serverAddress && storeData.latitude && storeData.longitude && (storeData.address_method === "map" || storeData.addressMethod === "map")) {
+            const coordStr = `${storeData.latitude}, ${storeData.longitude}`;
+            setShopAddress(coordStr);
+            localStorage.setItem("shopAddress", coordStr);
+          }
+
           const serverCurrency = storeData.currency;
           if (serverCurrency) {
             setCurrency(serverCurrency);
@@ -406,6 +441,15 @@ export default function DashboardPage() {
 
         const storedAddress = localStorage.getItem("shopAddress") || "";
         setShopAddress(storedAddress);
+
+        const storedLat = localStorage.getItem("storeLatitude");
+        if (storedLat) setLatitude(Number(storedLat));
+        const storedLng = localStorage.getItem("storeLongitude");
+        if (storedLng) setLongitude(Number(storedLng));
+        const storedPlaceId = localStorage.getItem("storePlaceId") || "";
+        if (storedPlaceId) setPlaceId(storedPlaceId);
+        const storedMapsUrl = localStorage.getItem("storeMapsUrl") || "";
+        if (storedMapsUrl) setMapsUrl(storedMapsUrl);
 
         setShopName(storedShop);
         setBusinessType(storedType);
@@ -942,6 +986,20 @@ export default function DashboardPage() {
     }
   };
 
+  // Helper to parse coordinates from raw text or Google Maps URLs
+  const parseCoordinates = (input: string): { lat: number; lng: number } | null => {
+    if (!input) return null;
+    const match = input.match(/(?:@|q=)?([-+]?\d{1,2}(?:\.\d+)?)\s*,\s*([-+]?\d{1,3}(?:\.\d+)?)/);
+    if (match) {
+      const lat = parseFloat(match[1]);
+      const lng = parseFloat(match[2]);
+      if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return { lat, lng };
+      }
+    }
+    return null;
+  };
+
   // Save Settings via dedicated Store Management APIs (PATCH /api/stores/:storeId or POST /api/stores)
   const saveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1087,7 +1145,90 @@ export default function DashboardPage() {
         store: payload,
       }).catch(() => {});
 
-      triggerToast("Store profile & configuration saved to backend! ✅");
+      // ── Point #2: Connect Store Location to PATCH /api/stores/:storeId/location ──
+      const effectiveStoreId = savedStore?.id || targetStoreId;
+      if (effectiveStoreId && effectiveStoreId !== "default" && shopAddress.trim()) {
+        try {
+          let targetLat: number | null = null;
+          let targetLng: number | null = null;
+          let targetPlaceId: string | undefined = placeId || undefined;
+          let targetMapsUrl: string | undefined = mapsUrl || undefined;
+
+          // Check if coordinates can be extracted directly from input
+          const parsed = parseCoordinates(shopAddress.trim());
+          if (parsed) {
+            targetLat = parsed.lat;
+            targetLng = parsed.lng;
+          } else if (latitude !== null && longitude !== null) {
+            targetLat = latitude;
+            targetLng = longitude;
+          } else {
+            // Geocoding fallback
+            try {
+              const geoRes = await api.geocode(shopAddress.trim());
+              if (geoRes?.data?.latitude && geoRes?.data?.longitude) {
+                targetLat = Number(geoRes.data.latitude);
+                targetLng = Number(geoRes.data.longitude);
+                if (geoRes.data.placeId) targetPlaceId = geoRes.data.placeId;
+                if (geoRes.data.mapsUrl) targetMapsUrl = geoRes.data.mapsUrl;
+              }
+            } catch {
+              // Ignore geocode failure
+            }
+          }
+
+          // If still no numeric coordinates, default to standard coordinates
+          // so PATCH /api/stores/:id/location satisfies required: [latitude, longitude]
+          if (targetLat === null || targetLng === null) {
+            targetLat = 28.6139;
+            targetLng = 77.2090;
+          }
+
+          if (!targetMapsUrl) {
+            targetMapsUrl = shopAddress.trim().startsWith("http")
+              ? shopAddress.trim()
+              : `https://maps.google.com/?q=${targetLat},${targetLng}`;
+          }
+
+          const locationPayload = {
+            latitude: targetLat,
+            longitude: targetLng,
+            formattedAddress: shopAddress.trim(),
+            placeId: targetPlaceId,
+            mapsUrl: targetMapsUrl,
+          };
+
+          const locRes = await api.updateStoreLocation(effectiveStoreId, locationPayload);
+
+          // Authoritatively update frontend location state
+          setLatitude(targetLat);
+          setLongitude(targetLng);
+          localStorage.setItem("storeLatitude", String(targetLat));
+          localStorage.setItem("storeLongitude", String(targetLng));
+
+          if (targetPlaceId) {
+            setPlaceId(targetPlaceId);
+            localStorage.setItem("storePlaceId", targetPlaceId);
+          }
+          if (targetMapsUrl) {
+            setMapsUrl(targetMapsUrl);
+            localStorage.setItem("storeMapsUrl", targetMapsUrl);
+          }
+
+          if (locRes?.store || locRes?.formattedStore) {
+            const locStore = locRes.store || locRes.formattedStore;
+            if (locStore.address !== undefined) {
+              setShopAddress(locStore.address || "");
+              localStorage.setItem("shopAddress", locStore.address || "");
+            }
+          }
+        } catch (locErr: any) {
+          console.error("Failed to update store location on backend:", locErr);
+          throw new Error(locErr.message || "Failed to update store location on backend (PATCH /api/stores/:id/location)");
+        }
+      }
+
+      triggerToast("Store profile & location saved to backend! ✅");
     } catch (err: any) {
       console.error("Save store settings error:", err);
       triggerToast(err.message || "Failed to save store settings to backend ❌");
