@@ -237,6 +237,76 @@ export default function DashboardPage() {
   const [deploymentUrl, setDeploymentUrl] = useState<string>("");
   const [isBackendConnected, setIsBackendConnected] = useState<boolean>(false);
 
+  // Backend Analytics Telemetry State (GET /api/stores/:storeId/analytics?timeframe=...)
+  const [backendAnalytics, setBackendAnalytics] = useState<{
+    totalSales?: number;
+    totalOrders?: number;
+    uniqueCustomers?: number;
+    totalProducts?: number;
+    totalStock?: number;
+    lowStockCount?: number;
+    chart?: {
+      labels: string[];
+      values: number[];
+    };
+    timeframe?: "daily" | "weekly" | "monthly" | "yearly";
+    lastUpdated?: string;
+  } | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState<boolean>(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+
+  // Dedicated helper to fetch analytics from GET /api/stores/:storeId/analytics?timeframe=...
+  const fetchAnalytics = async (
+    targetStoreId?: string,
+    targetTimeframe?: "daily" | "weekly" | "monthly" | "yearly"
+  ) => {
+    const activeStoreId =
+      targetStoreId ||
+      backendStoreId ||
+      (typeof window !== "undefined" ? localStorage.getItem("obsidian_store_id") : "") ||
+      "";
+    const tf = targetTimeframe || chartTimeframe;
+    if (!activeStoreId || activeStoreId === "default") return;
+
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    try {
+      const res = await api.getAnalytics(activeStoreId, tf);
+      const data = res?.analytics || res;
+      if (data && (data.totalSales !== undefined || data.totalOrders !== undefined || data.chart)) {
+        setBackendAnalytics({
+          totalSales: typeof data.totalSales === "number" ? data.totalSales : undefined,
+          totalOrders: typeof data.totalOrders === "number" ? data.totalOrders : undefined,
+          uniqueCustomers: typeof data.uniqueCustomers === "number" ? data.uniqueCustomers : undefined,
+          totalProducts: typeof data.totalProducts === "number" ? data.totalProducts : undefined,
+          totalStock: typeof data.totalStock === "number" ? data.totalStock : undefined,
+          lowStockCount: typeof data.lowStockCount === "number" ? data.lowStockCount : undefined,
+          chart:
+            data.chart?.labels && data.chart?.values
+              ? {
+                  labels: Array.isArray(data.chart.labels) ? data.chart.labels : [],
+                  values: Array.isArray(data.chart.values) ? data.chart.values.map(Number) : [],
+                }
+              : undefined,
+          timeframe: (data.timeframe as "daily" | "weekly" | "monthly" | "yearly") || tf,
+          lastUpdated: data.lastUpdated,
+        });
+      }
+    } catch (err: any) {
+      console.warn("Backend analytics fetch note:", err?.message || err);
+      setAnalyticsError(err?.message || "Failed to fetch backend analytics");
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  // Trigger backend analytics request whenever backendStoreId or chartTimeframe updates
+  useEffect(() => {
+    if (backendStoreId && backendStoreId !== "default") {
+      fetchAnalytics(backendStoreId, chartTimeframe);
+    }
+  }, [backendStoreId, chartTimeframe]);
+
   // Automated deployment status polling ref & helper
   const deploymentPollRef = useRef<NodeJS.Timeout | null>(null);
   const stopDeploymentPolling = () => {
@@ -347,6 +417,27 @@ export default function DashboardPage() {
         // ── Step 2c: Fetch account state (for user profile, products, orders, and fallback store) ──
         const state = await api.getAccountState();
         setIsBackendConnected(true);
+
+        if (state.analytics) {
+          const initA = state.analytics;
+          setBackendAnalytics({
+            totalSales: typeof initA.totalSales === "number" ? initA.totalSales : undefined,
+            totalOrders: typeof initA.totalOrders === "number" ? initA.totalOrders : undefined,
+            uniqueCustomers: typeof initA.uniqueCustomers === "number" ? initA.uniqueCustomers : undefined,
+            totalProducts: typeof initA.totalProducts === "number" ? initA.totalProducts : undefined,
+            totalStock: typeof initA.totalStock === "number" ? initA.totalStock : undefined,
+            lowStockCount: typeof initA.lowStockCount === "number" ? initA.lowStockCount : undefined,
+            chart:
+              initA.chart?.labels && initA.chart?.values
+                ? {
+                    labels: Array.isArray(initA.chart.labels) ? initA.chart.labels : [],
+                    values: Array.isArray(initA.chart.values) ? initA.chart.values.map(Number) : [],
+                  }
+                : undefined,
+            timeframe: (initA.timeframe as "daily" | "weekly" | "monthly" | "yearly") || "monthly",
+            lastUpdated: initA.lastUpdated,
+          });
+        }
 
         if (!storeData && state.store) {
           storeData = state.store;
@@ -1083,16 +1174,30 @@ export default function DashboardPage() {
     }
   };
 
-  // Dynamic Statistics
-  const totalProducts = products.length;
-  const totalStockCount = products.reduce((acc, p) => acc + p.stock, 0);
-  const totalOrdersCount = orders.length;
-  const totalRevenue = orders.reduce((acc, o) => acc + o.totalPrice, 0);
-  const uniqueCustomers = new Set(orders.map((o) => o.customerName)).size;
+  // Dynamic Statistics (Powered by authoritative backend analytics telemetry if available)
+  const totalProducts =
+    backendAnalytics?.totalProducts !== undefined ? backendAnalytics.totalProducts : products.length;
+  const totalStockCount =
+    backendAnalytics?.totalStock !== undefined
+      ? backendAnalytics.totalStock
+      : products.reduce((acc, p) => acc + p.stock, 0);
+  const totalOrdersCount =
+    backendAnalytics?.totalOrders !== undefined ? backendAnalytics.totalOrders : orders.length;
+  const totalRevenue =
+    backendAnalytics?.totalSales !== undefined
+      ? backendAnalytics.totalSales
+      : orders.reduce((acc, o) => acc + o.totalPrice, 0);
+  const uniqueCustomers =
+    backendAnalytics?.uniqueCustomers !== undefined
+      ? backendAnalytics.uniqueCustomers
+      : new Set(orders.map((o) => o.customerName)).size;
 
   // Stitch Dashboard Low Stock Statistics & Quick Restock
   const lowStockProducts = products.filter((p) => p.stock <= 5);
-  const lowStockCount = lowStockProducts.length;
+  const lowStockCount =
+    backendAnalytics?.lowStockCount !== undefined
+      ? backendAnalytics.lowStockCount
+      : lowStockProducts.length;
 
   const handleQuickRestock = async (productId: number | string, productName: string) => {
     const target = products.find((p) => String(p.id) === String(productId));
@@ -2083,17 +2188,31 @@ export default function DashboardPage() {
             {activeTab === "overview" && (
               <button
                 className="stitch-refresh-btn"
-                onClick={() => {
+                onClick={async () => {
+                  if (backendStoreId && backendStoreId !== "default") {
+                    await fetchAnalytics(backendStoreId, chartTimeframe);
+                  }
                   triggerToast("Storefront metrics refreshed! ✨");
                 }}
+                disabled={analyticsLoading}
                 type="button"
                 style={{ padding: "6px 12px", fontSize: "0.74rem" }}
                 title="Refresh store metrics"
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ animation: analyticsLoading ? "spin 0.8s linear infinite" : "none" }}
+                >
                   <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                Refresh
+                {analyticsLoading ? "Refreshing..." : "Refresh"}
               </button>
             )}
 
@@ -2216,7 +2335,7 @@ export default function DashboardPage() {
             const usableHeight = baselineY - topY;
 
             const points = values.map((val, idx) => {
-              const cx = Math.round((idx / (values.length - 1)) * 700);
+              const cx = values.length > 1 ? Math.round((idx / (values.length - 1)) * 700) : 350;
               const cy = maxVal > 0 ? Math.round(baselineY - (val / maxVal) * usableHeight) : baselineY;
               return {
                 cx,
@@ -2227,7 +2346,7 @@ export default function DashboardPage() {
               };
             });
 
-            let path = `M ${points[0].cx},${points[0].cy}`;
+            let path = points.length > 0 ? `M ${points[0].cx},${points[0].cy}` : "M 0,190";
             for (let i = 0; i < points.length - 1; i++) {
               const p0 = points[i];
               const p1 = points[i + 1];
@@ -2240,9 +2359,16 @@ export default function DashboardPage() {
             const activePoints = points.filter((p) => p.val > 0);
 
             let growthText = "0 orders";
-            if (orders.length > 0) {
-              const itemsCount = orders.reduce((acc, o) => acc + (Number(o.quantity) || 1), 0);
-              growthText = `${orders.length} order${orders.length > 1 ? "s" : ""} • ${itemsCount} sold`;
+            const effectiveOrders =
+              backendAnalytics?.totalOrders !== undefined
+                ? backendAnalytics.totalOrders
+                : orders.length;
+            if (effectiveOrders > 0) {
+              const itemsCount =
+                orders.length > 0
+                  ? orders.reduce((acc, o) => acc + (Number(o.quantity) || 1), 0)
+                  : effectiveOrders;
+              growthText = `${effectiveOrders} order${effectiveOrders > 1 ? "s" : ""} • ${itemsCount} sold`;
             }
 
             return {
@@ -2258,14 +2384,35 @@ export default function DashboardPage() {
             };
           };
 
-          const chartDataByTimeframe = {
-            weekly: buildChartData(weeklyLabels, weeklyValues, "gross volume this week"),
-            daily: buildChartData(dailyLabels, dailyValues, "gross volume today"),
-            monthly: buildChartData(monthlyLabels, monthlyValues, "gross volume this month"),
-            yearly: buildChartData(yearlyLabels, yearlyValues, "gross volume this year"),
+          const subTexts: Record<"daily" | "weekly" | "monthly" | "yearly", string> = {
+            daily: "gross volume today",
+            weekly: "gross volume this week",
+            monthly: "gross volume this month",
+            yearly: "gross volume this year",
           };
 
-          const currentChart = chartDataByTimeframe[chartTimeframe];
+          let currentChart: ReturnType<typeof buildChartData>;
+
+          if (
+            backendAnalytics?.chart?.labels &&
+            backendAnalytics?.chart?.values &&
+            backendAnalytics.chart.labels.length > 0 &&
+            (backendAnalytics.timeframe === chartTimeframe || !backendAnalytics.timeframe)
+          ) {
+            currentChart = buildChartData(
+              backendAnalytics.chart.labels,
+              backendAnalytics.chart.values,
+              subTexts[chartTimeframe]
+            );
+          } else {
+            const chartDataByTimeframe = {
+              weekly: buildChartData(weeklyLabels, weeklyValues, subTexts.weekly),
+              daily: buildChartData(dailyLabels, dailyValues, subTexts.daily),
+              monthly: buildChartData(monthlyLabels, monthlyValues, subTexts.monthly),
+              yearly: buildChartData(yearlyLabels, yearlyValues, subTexts.yearly),
+            };
+            currentChart = chartDataByTimeframe[chartTimeframe];
+          }
 
           return (
             <div className="stitch-dashboard-container">

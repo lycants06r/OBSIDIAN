@@ -332,8 +332,40 @@ export const api = {
     }),
 
   // Analytics
-  getAnalytics: (storeId: string, timeframe: "daily" | "weekly" | "monthly" | "yearly" = "monthly", token?: string) =>
-    apiRequest(`/api/stores/${storeId}/analytics?timeframe=${timeframe}`, {
+  getAnalytics: (
+    storeId: string,
+    timeframe: "daily" | "weekly" | "monthly" | "yearly" = "monthly",
+    token?: string
+  ) =>
+    apiRequest<{
+      success?: boolean;
+      analytics?: {
+        totalSales?: number;
+        totalOrders?: number;
+        uniqueCustomers?: number;
+        totalProducts?: number;
+        totalStock?: number;
+        lowStockCount?: number;
+        chart?: {
+          labels: string[];
+          values: number[];
+        };
+        timeframe?: string;
+        lastUpdated?: string;
+      };
+      totalSales?: number;
+      totalOrders?: number;
+      uniqueCustomers?: number;
+      totalProducts?: number;
+      totalStock?: number;
+      lowStockCount?: number;
+      chart?: {
+        labels: string[];
+        values: number[];
+      };
+      timeframe?: string;
+      lastUpdated?: string;
+    }>(`/api/stores/${storeId}/analytics?timeframe=${timeframe}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }),
 
