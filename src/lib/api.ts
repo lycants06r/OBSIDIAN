@@ -338,30 +338,84 @@ export const api = {
     }),
 
   // Realtime Server-Sent Events listener
-  connectRealtime: (storeId: string, onEvent: (event: { type: string; payload: any }) => void): (() => void) => {
-    if (typeof window === "undefined" || !("EventSource" in window)) {
+  connectRealtime: (
+    storeId: string,
+    onEvent: (event: { type: string; payload: any }) => void
+  ): (() => void) => {
+    if (typeof window === "undefined" || !("EventSource" in window) || !storeId) {
       return () => {};
     }
 
     const token = getStoredToken();
-    const url = `${API_BASE_URL}/api/stores/${storeId}/realtime${token ? `?token=${encodeURIComponent(token)}` : ""}`;
-    const es = new EventSource(url);
+    const url = `${API_BASE_URL}/api/stores/${encodeURIComponent(storeId)}/realtime${
+      token ? `?token=${encodeURIComponent(token)}` : ""
+    }`;
 
-    es.onmessage = (e) => {
+    let es: EventSource | null = null;
+    let isClosed = false;
+
+    const eventTypes = [
+      "ORDER_CREATED",
+      "ORDER_STATUS_UPDATED",
+      "ORDER_UPDATED",
+      "ORDER_DELETED",
+      "STOCK_UPDATED",
+      "PRODUCT_UPDATED",
+      "PRODUCT_CREATED",
+      "PRODUCT_DELETED",
+      "STORE_UPDATED",
+      "STORE_DEPLOYMENT_UPDATED",
+      "message",
+    ];
+
+    const handleData = (type: string, rawData: string) => {
+      if (!rawData) return;
       try {
-        const data = JSON.parse(e.data);
-        onEvent(data);
+        const parsed = JSON.parse(rawData);
+        // If parsed is an envelope with type & payload:
+        if (parsed && typeof parsed === "object" && parsed.type) {
+          onEvent(parsed);
+        } else {
+          // If server emitted a named event (e.g. event: ORDER_CREATED) with direct payload:
+          onEvent({ type, payload: parsed });
+        }
       } catch {
-        // ignore raw pings or heartbeats
+        // Plain text or ping/heartbeat
+        if (type !== "message" && type !== "ping" && type !== "heartbeat") {
+          onEvent({ type, payload: rawData });
+        }
       }
     };
 
-    es.onerror = () => {
-      // EventSource automatically retries connection
-    };
+    try {
+      es = new EventSource(url);
+
+      es.onmessage = (e) => {
+        handleData("message", e.data);
+      };
+
+      eventTypes.forEach((evtType) => {
+        if (evtType !== "message") {
+          es?.addEventListener(evtType, (e: any) => {
+            handleData(evtType, e.data);
+          });
+        }
+      });
+
+      es.onerror = (err) => {
+        // EventSource will automatically attempt reconnection by default
+        console.warn("[Realtime SSE] Connection error or reconnecting:", err);
+      };
+    } catch (err) {
+      console.warn("[Realtime SSE] Failed to initialize EventSource:", err);
+    }
 
     return () => {
-      es.close();
+      isClosed = true;
+      if (es) {
+        es.close();
+        es = null;
+      }
     };
   },
 
@@ -383,25 +437,28 @@ export const api = {
   // Deployments Orchestration
   deployStore: (storeId: string, token?: string) =>
     apiRequest<{
-      message: string;
-      liveUrl: string;
-      deploymentId: string;
-      status: string;
-      deployment: any;
-      store: any;
-    }>(`/api/stores/${storeId}/deploy`, {
+      message?: string;
+      url?: string;
+      liveUrl?: string;
+      deploymentUrl?: string;
+      deploymentId?: string;
+      status?: string;
+      deployment?: any;
+      store?: any;
+    }>(`/api/stores/${encodeURIComponent(storeId)}/deploy`, {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }),
 
   getDeploymentStatus: (storeId: string, token?: string) =>
     apiRequest<{
-      deploymentId: string;
-      status: string;
-      deploymentUrl: string;
-      liveUrl: string;
-      createdAt: string;
-    }>(`/api/stores/${storeId}/deployment-status`, {
+      deploymentId?: string;
+      status?: string;
+      url?: string;
+      deploymentUrl?: string;
+      liveUrl?: string;
+      createdAt?: string;
+    }>(`/api/stores/${encodeURIComponent(storeId)}/deployment-status`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }),
 };

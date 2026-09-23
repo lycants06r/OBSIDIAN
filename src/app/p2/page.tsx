@@ -10,6 +10,8 @@ import "./dashboard.css";
 
 interface Product {
   id: number | string;
+  backendId?: string;
+  client_id?: number | string;
   name: string;
   price: number;
   sellingPrice?: number;
@@ -271,6 +273,9 @@ export default function DashboardPage() {
         storedStoreId = localStorage.getItem("obsidian_store_id") || "";
         if (storedStoreId) setBackendStoreId(storedStoreId);
 
+        const storedDeployUrl = localStorage.getItem("obsidian_deployment_url");
+        if (storedDeployUrl) setDeploymentUrl(storedDeployUrl);
+
         const rawProducts = localStorage.getItem("obsidian_products") || localStorage.getItem("products");
         if (rawProducts) {
           const parsed = JSON.parse(rawProducts);
@@ -470,31 +475,218 @@ export default function DashboardPage() {
 
           // ── Connect Real-Time SSE for live updates ──
           unsubscribeSse = api.connectRealtime(storeData.id, (event) => {
-            if (event.type === "PRODUCT_CREATED" && event.payload?.product) {
-              setProducts((prev) => [event.payload.product, ...prev.filter((p) => p.id !== event.payload.product.id)]);
-            } else if (event.type === "PRODUCT_UPDATED" && event.payload?.product) {
-              setProducts((prev) => prev.map((p) => (p.id === event.payload.product.id ? event.payload.product : p)));
-            } else if (event.type === "PRODUCT_DELETED" && event.payload?.id) {
-              setProducts((prev) => prev.filter((p) => String(p.id) !== String(event.payload.id)));
-            } else if (event.type === "ORDER_CREATED" && event.payload?.order) {
-              setOrders((prev) => [event.payload.order, ...prev.filter((o) => String(o.id) !== String(event.payload.order.id))]);
-            } else if (
-              (event.type === "ORDER_UPDATED" || event.type === "ORDER_STATUS_UPDATED") &&
-              (event.payload?.order || event.payload?.id)
-            ) {
-              const updatedOrd = event.payload.order;
-              if (updatedOrd) {
-                setOrders((prev) => prev.map((o) => (String(o.id) === String(updatedOrd.id) ? { ...o, ...updatedOrd } : o)));
-              } else if (event.payload?.id && event.payload?.status) {
-                setOrders((prev) => prev.map((o) => (String(o.id) === String(event.payload.id) ? { ...o, status: event.payload.status } : o)));
+            const { type, payload } = event;
+
+            // 1. ORDER_CREATED
+            if (type === "ORDER_CREATED") {
+              const ord = payload?.order || (payload?.id ? payload : null);
+              if (ord) {
+                const normalizedOrder: Order = {
+                  id: ord.id || ord._id || Date.now(),
+                  customerName: ord.customerName || ord.customer_name || ord.customer || "Customer",
+                  productName: ord.productName || ord.product_name || ord.product || "Product",
+                  productId: ord.productId || ord.product_id || 0,
+                  quantity: Number(ord.quantity || ord.qty || 1),
+                  totalPrice: Number(ord.totalPrice || ord.total_price || ord.total || ord.price || 0),
+                  status: ord.status || "pending",
+                  date: ord.date || ord.createdAt || ord.created_at || "Just now",
+                };
+                setOrders((prev) => {
+                  const updated = [normalizedOrder, ...prev.filter((o) => String(o.id) !== String(normalizedOrder.id))];
+                  localStorage.setItem("obsidian_orders", JSON.stringify(updated));
+                  localStorage.setItem("orders", JSON.stringify(updated));
+                  return updated;
+                });
               }
-            } else if (event.type === "ORDER_DELETED" && (event.payload?.id || event.payload?.orderId)) {
-              const targetId = event.payload.id || event.payload.orderId;
-              setOrders((prev) => prev.filter((o) => String(o.id) !== String(targetId)));
-            } else if (event.type === "STOCK_UPDATED") {
-              setProducts((prev) =>
-                prev.map((p) => (String(p.id) === String(event.payload.productId) ? { ...p, stock: event.payload.stock } : p))
-              );
+            }
+            // 2. ORDER_STATUS_UPDATED / ORDER_UPDATED
+            else if (type === "ORDER_STATUS_UPDATED" || type === "ORDER_UPDATED") {
+              const updatedOrd = payload?.order;
+              const targetId = updatedOrd?.id || payload?.id || payload?.orderId;
+              const newStatus = updatedOrd?.status || payload?.status;
+
+              if (targetId) {
+                setOrders((prev) => {
+                  const updated = prev.map((o) => {
+                    if (String(o.id) === String(targetId)) {
+                      return {
+                        ...o,
+                        ...(updatedOrd || {}),
+                        ...(newStatus ? { status: newStatus } : {}),
+                      };
+                    }
+                    return o;
+                  });
+                  localStorage.setItem("obsidian_orders", JSON.stringify(updated));
+                  localStorage.setItem("orders", JSON.stringify(updated));
+                  return updated;
+                });
+              }
+            }
+            // 3. ORDER_DELETED
+            else if (type === "ORDER_DELETED") {
+              const targetId = payload?.id || payload?.orderId || payload?.order?.id;
+              if (targetId) {
+                setOrders((prev) => {
+                  const updated = prev.filter((o) => String(o.id) !== String(targetId));
+                  localStorage.setItem("obsidian_orders", JSON.stringify(updated));
+                  localStorage.setItem("orders", JSON.stringify(updated));
+                  return updated;
+                });
+              }
+            }
+            // 4. STOCK_UPDATED
+            else if (type === "STOCK_UPDATED") {
+              const prodId = payload?.productId || payload?.id || payload?.product?.id;
+              const newStock = payload?.stock !== undefined ? payload.stock : payload?.quantity;
+              if (prodId !== undefined && newStock !== undefined) {
+                setProducts((prev) => {
+                  const updated = prev.map((p) =>
+                    String(p.id) === String(prodId) || (p.backendId && String(p.backendId) === String(prodId))
+                      ? { ...p, stock: Number(newStock) }
+                      : p
+                  );
+                  localStorage.setItem("obsidian_products", JSON.stringify(updated));
+                  localStorage.setItem("products", JSON.stringify(updated));
+                  return updated;
+                });
+              }
+            }
+            // 5. PRODUCT_UPDATED / PRODUCT_CREATED / PRODUCT_DELETED
+            else if (type === "PRODUCT_UPDATED") {
+              const prod = payload?.product || (payload?.name ? payload : null);
+              if (prod && (prod.id !== undefined || prod.backendId)) {
+                const targetId = prod.id !== undefined ? prod.id : prod.backendId;
+                setProducts((prev) => {
+                  const updated = prev.map((p) =>
+                    String(p.id) === String(targetId) || (p.backendId && String(p.backendId) === String(prod.backendId))
+                      ? { ...p, ...prod }
+                      : p
+                  );
+                  localStorage.setItem("obsidian_products", JSON.stringify(updated));
+                  localStorage.setItem("products", JSON.stringify(updated));
+                  return updated;
+                });
+              }
+            } else if (type === "PRODUCT_CREATED") {
+              const prod = payload?.product || (payload?.name ? payload : null);
+              if (prod) {
+                setProducts((prev) => {
+                  const updated = [prod, ...prev.filter((p) => String(p.id) !== String(prod.id))];
+                  localStorage.setItem("obsidian_products", JSON.stringify(updated));
+                  localStorage.setItem("products", JSON.stringify(updated));
+                  return updated;
+                });
+              }
+            } else if (type === "PRODUCT_DELETED") {
+              const targetId = payload?.id || payload?.productId || payload?.product?.id;
+              if (targetId) {
+                setProducts((prev) => {
+                  const updated = prev.filter(
+                    (p) => String(p.id) !== String(targetId) && (!p.backendId || String(p.backendId) !== String(targetId))
+                  );
+                  localStorage.setItem("obsidian_products", JSON.stringify(updated));
+                  localStorage.setItem("products", JSON.stringify(updated));
+                  return updated;
+                });
+              }
+            }
+            // 6. STORE_UPDATED
+            else if (type === "STORE_UPDATED") {
+              const st = payload?.store || payload;
+              if (st) {
+                if (st.name || st.shopName) {
+                  const n = st.name || st.shopName;
+                  setShopName(n);
+                  localStorage.setItem("shopName", n);
+                }
+                if (st.business_type || st.businessType) {
+                  const bt = st.business_type || st.businessType;
+                  setBusinessType(bt);
+                  localStorage.setItem("businessType", bt);
+                }
+                if (st.custom_business_type || st.customBusinessType) {
+                  const cbt = st.custom_business_type || st.customBusinessType;
+                  setCustomBusinessType(cbt);
+                  localStorage.setItem("customBusinessType", cbt);
+                }
+                if (Array.isArray(st.custom_options || st.customOptions)) {
+                  const co = st.custom_options || st.customOptions;
+                  setCustomOptions(co);
+                  localStorage.setItem("customOptions", JSON.stringify(co));
+                }
+                if (st.currency) {
+                  setCurrency(st.currency);
+                  localStorage.setItem("storeCurrency", st.currency);
+                  localStorage.setItem("currency", st.currency);
+                }
+                if (st.address !== undefined || st.shopAddress !== undefined || st.formatted_address !== undefined) {
+                  const addr = st.address || st.shopAddress || st.formatted_address || "";
+                  setShopAddress(addr);
+                  localStorage.setItem("shopAddress", addr);
+                }
+                if (st.address_method || st.addressMethod) {
+                  const am = st.address_method || st.addressMethod;
+                  setAddressMethod(am);
+                  localStorage.setItem("addressMethod", am);
+                }
+                if (st.latitude !== undefined && st.latitude !== null) {
+                  setLatitude(Number(st.latitude));
+                  localStorage.setItem("storeLatitude", String(st.latitude));
+                }
+                if (st.longitude !== undefined && st.longitude !== null) {
+                  setLongitude(Number(st.longitude));
+                  localStorage.setItem("storeLongitude", String(st.longitude));
+                }
+                if (st.place_id || st.placeId) {
+                  const pid = st.place_id || st.placeId;
+                  setPlaceId(pid);
+                  localStorage.setItem("storePlaceId", pid);
+                }
+                if (st.maps_url || st.mapsUrl) {
+                  const murl = st.maps_url || st.mapsUrl;
+                  setMapsUrl(murl);
+                  localStorage.setItem("storeMapsUrl", murl);
+                }
+                if (st.logo_url !== undefined) {
+                  setLogoUrl(st.logo_url || "");
+                  if (st.logo_url) localStorage.setItem("storeLogo", st.logo_url);
+                  else localStorage.removeItem("storeLogo");
+                }
+                if (st.banner_url !== undefined) {
+                  setBannerUrl(st.banner_url || "");
+                  if (st.banner_url) localStorage.setItem("storeBanner", st.banner_url);
+                  else localStorage.removeItem("storeBanner");
+                }
+                const sTpl = st.selected_template_id || st.selectedTemplateId || st.template_id || st.templateId;
+                if (sTpl) {
+                  setSelectedTemplateId(sTpl);
+                  localStorage.setItem("obsidian_selected_template_id", sTpl);
+                }
+                if (st.slug) {
+                  localStorage.setItem("storeSlug", st.slug);
+                }
+              }
+            }
+            // 7. STORE_DEPLOYMENT_UPDATED
+            else if (type === "STORE_DEPLOYMENT_UPDATED") {
+              const dep = payload;
+              const depUrl =
+                dep?.deploymentUrl ||
+                dep?.deployment_url ||
+                dep?.live_url ||
+                dep?.url ||
+                dep?.store?.live_url ||
+                dep?.store?.deploymentUrl;
+              if (depUrl) {
+                setDeploymentUrl(depUrl);
+                localStorage.setItem("obsidian_deployment_url", depUrl);
+              }
+              if (dep?.isDeploying !== undefined) {
+                setIsDeploying(Boolean(dep.isDeploying));
+              } else if (depUrl) {
+                setIsDeploying(false);
+              }
             }
           });
         }
@@ -623,6 +815,9 @@ export default function DashboardPage() {
         const storedTemplateId = localStorage.getItem("obsidian_selected_template_id");
         if (storedTemplateId) setSelectedTemplateId(storedTemplateId);
 
+        const storedOfflineDeployUrl = localStorage.getItem("obsidian_deployment_url");
+        if (storedOfflineDeployUrl) setDeploymentUrl(storedOfflineDeployUrl);
+
         setShopName(storedShop);
         setBusinessType(storedType);
         setCurrency(storedCurrency);
@@ -697,15 +892,35 @@ export default function DashboardPage() {
     triggerToast("Compiling storefront & deploying to Vercel... 🚀");
     try {
       const targetStoreId = backendStoreId || localStorage.getItem("obsidian_store_id") || "default";
+      if (!targetStoreId || targetStoreId === "default") {
+        throw new Error("Valid backend store ID required for deployment");
+      }
       const res = await api.deployStore(targetStoreId);
-      if (res.liveUrl) {
-        setDeploymentUrl(res.liveUrl);
-        triggerToast(`Live on Vercel: ${res.liveUrl} 🎉`);
+      const liveUrl = res?.url || res?.liveUrl || res?.deploymentUrl || res?.deployment?.url;
+      if (liveUrl) {
+        setDeploymentUrl(liveUrl);
+        localStorage.setItem("obsidian_deployment_url", liveUrl);
+        triggerToast(`Live on Vercel: ${liveUrl} 🎉`);
       } else {
-        triggerToast("Deployment successfully submitted to Vercel! ✨");
+        triggerToast("Deployment successfully initiated on backend! 🚀");
+      }
+
+      // Check status via GET /api/stores/:storeId/deployment-status
+      try {
+        const statusRes = await api.getDeploymentStatus(targetStoreId);
+        if (statusRes?.deploymentUrl || statusRes?.liveUrl || statusRes?.url) {
+          const finalUrl = statusRes.deploymentUrl || statusRes.liveUrl || statusRes.url;
+          if (finalUrl) {
+            setDeploymentUrl(finalUrl);
+            localStorage.setItem("obsidian_deployment_url", finalUrl);
+          }
+        }
+      } catch {
+        // Status check is secondary
       }
     } catch (err: any) {
-      triggerToast(err.message || "Deployment initiated (simulated mode)");
+      console.error("[Deploy] Deployment failed:", err);
+      triggerToast(`Deployment failed: ${err.message || "Network error"}`);
     } finally {
       setIsDeploying(false);
     }
@@ -3239,7 +3454,7 @@ export default function DashboardPage() {
               {/* Store Link URL Box */}
               <div className="stitch-link-box">
                 <span className="stitch-link-text">
-                  {storefrontUrl || `http://localhost:3000/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
+                  {deploymentUrl || storefrontUrl || `http://localhost:3000/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
                 </span>
                 <button className="stitch-copy-btn" onClick={copyStoreLink} type="button">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -3250,9 +3465,9 @@ export default function DashboardPage() {
               </div>
 
               {/* Quick Link Footer */}
-              <div className="stitch-link-footer">
+              <div className="stitch-link-footer" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <a
-                  href={`/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
+                  href={deploymentUrl || `/p3.html?slug=${shopName.toLowerCase().replace(/\s+/g, "-")}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="stitch-link-btn"
@@ -3266,6 +3481,15 @@ export default function DashboardPage() {
                   type="button"
                 >
                   📷 QR Code
+                </button>
+                <button
+                  className="stitch-link-btn"
+                  style={{ color: "#7c3aed", fontWeight: 700 }}
+                  onClick={handleDeployToVercel}
+                  disabled={isDeploying}
+                  type="button"
+                >
+                  {isDeploying ? "Deploying... ⏳" : "🚀 Deploy to Vercel"}
                 </button>
               </div>
             </div>
