@@ -468,8 +468,10 @@ export default function DashboardPage() {
             setStoreSlug(storeData.slug);
             localStorage.setItem("storeSlug", storeData.slug);
           }
-          if (storeData.live_url || storeData.deploymentUrl) {
-            setDeploymentUrl(storeData.live_url || storeData.deploymentUrl);
+          if (storeData.live_url || storeData.liveUrl || storeData.deploymentUrl) {
+            const live = storeData.live_url || storeData.liveUrl || storeData.deploymentUrl;
+            setDeploymentUrl(live);
+            localStorage.setItem("obsidian_deployment_url", live);
           }
 
           const serverShopName = storeData.name || storeData.shopName;
@@ -971,13 +973,15 @@ export default function DashboardPage() {
     if (typeof window !== "undefined") {
       const activeSlug = storeSlug || localStorage.getItem("storeSlug") || "";
       const base = window.location.origin || "http://localhost:3000";
-      if (activeSlug) {
+      if (deploymentUrl) {
+        setStorefrontUrl(deploymentUrl);
+      } else if (activeSlug) {
         setStorefrontUrl(`${base}/p3.html?slug=${encodeURIComponent(activeSlug)}`);
       } else {
         setStorefrontUrl(`${base}/p3.html`);
       }
     }
-  }, [storeSlug]);
+  }, [storeSlug, deploymentUrl]);
 
   // Real-time synchronization when orders are placed or products updated in other tabs
   useEffect(() => {
@@ -1901,6 +1905,12 @@ export default function DashboardPage() {
         if (savedStore.slug) {
           setStoreSlug(savedStore.slug);
           localStorage.setItem("storeSlug", savedStore.slug);
+        }
+
+        if (savedStore.live_url || savedStore.liveUrl || savedStore.deploymentUrl) {
+          const live = savedStore.live_url || savedStore.liveUrl || savedStore.deploymentUrl;
+          setDeploymentUrl(live);
+          localStorage.setItem("obsidian_deployment_url", live);
         }
       } else {
         localStorage.setItem("ownerName", ownerName.trim());

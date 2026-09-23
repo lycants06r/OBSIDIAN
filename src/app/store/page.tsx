@@ -4,8 +4,10 @@ import { useEffect } from "react";
 
 export default function StoreRedirectPage() {
   useEffect(() => {
-    // Forward directly to the customer store HTML page
-    window.location.replace("/p3.html");
+    // Forward directly to the customer store HTML page with active slug if available
+    const slug = typeof window !== "undefined" ? localStorage.getItem("storeSlug") : null;
+    const target = slug ? `/p3.html?slug=${encodeURIComponent(slug)}` : "/p3.html";
+    window.location.replace(target);
   }, []);
 
   return (
